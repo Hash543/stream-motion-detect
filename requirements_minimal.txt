@@ -1,0 +1,39 @@
+# 最小化需求檔案 (不包含 dlib 相關套件)
+# 系統核心功能
+
+# 基礎套件
+fastapi==0.104.1
+uvicorn==0.24.0
+opencv-python==4.8.1.78
+numpy==1.24.3
+Pillow==10.0.1
+requests==2.31.0
+pydantic==2.4.2
+pydantic-settings==2.0.3
+python-dotenv==1.0.0
+aiofiles==23.2.0
+scipy==1.11.3
+imutils==0.5.4
+
+# AI/ML 框架
+torch==2.1.0
+torchvision==0.16.0
+ultralytics==8.0.196
+mediapipe==0.10.7
+onnxruntime==1.16.1
+
+# Web 相關
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# 資料庫
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# 非同步處理
+aiohttp
+asyncio-mqtt==0.16.1
+
+# InsightFace (人臉識別替代方案)
+insightface==0.7.3

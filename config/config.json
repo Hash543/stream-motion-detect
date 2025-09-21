@@ -1,0 +1,44 @@
+{
+  "rtsp_sources": [
+    {
+      "id": "camera_001",
+      "url": "rtsp://192.168.1.100:554/stream1",
+      "location": "工廠入口"
+    },
+    {
+      "id": "camera_002",
+      "url": "rtsp://192.168.1.101:554/stream1",
+      "location": "生產線A"
+    }
+  ],
+  "detection_settings": {
+    "helmet_confidence_threshold": 0.7,
+    "drowsiness_duration_threshold": 3.0,
+    "face_recognition_threshold": 0.6,
+    "processing_fps": 2
+  },
+  "notification_api": {
+    "endpoint": "https://your-server.com/api/violations",
+    "timeout": 10,
+    "retry_attempts": 3
+  },
+  "storage": {
+    "screenshot_path": "./screenshots/",
+    "max_storage_days": 30,
+    "image_quality": 95
+  },
+  "database": {
+    "type": "sqlite",
+    "url": "sqlite:///./data/monitoring.db"
+  },
+  "models": {
+    "helmet_model_path": "",
+    "face_model_path": "./models/face_recognition.pkl"
+  },
+  "logging": {
+    "level": "INFO",
+    "log_file": "./logs/monitoring.log",
+    "max_file_size": "10MB",
+    "backup_count": 5
+  }
+}

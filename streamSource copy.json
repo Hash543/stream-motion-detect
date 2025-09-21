@@ -1,0 +1,151 @@
+{
+  "stream_sources": [
+    {
+      "id": "webcam_local",
+      "name": "本地攝影機",
+      "type": "WEBCAM",
+      "location": "筆記本電腦",
+      "enabled": true,
+      "config": {
+        "device_index": 0,
+        "resolution": {
+          "width": 1280,
+          "height": 720
+        },
+        "fps": 30
+      }
+    },
+    {
+      "id": "rtsp_camera_1",
+      "name": "RTSP 監控攝影機 1",
+      "type": "RTSP",
+      "location": "入口大廳",
+      "enabled": false,
+      "config": {
+        "url": "rtsp://admin:password@192.168.1.100:554/stream1",
+        "username": "admin",
+        "password": "password",
+        "timeout": 30,
+        "buffer_size": 1
+      }
+    },
+    {
+      "id": "http_mjpeg_1",
+      "name": "HTTP MJPEG 串流",
+      "type": "HTTP_MJPEG",
+      "location": "辦公室",
+      "enabled": false,
+      "config": {
+        "url": "http://192.168.1.101:8080/mjpeg",
+        "username": null,
+        "password": null,
+        "timeout": 30,
+        "headers": {
+          "User-Agent": "StreamMotionDetect/1.0"
+        }
+      }
+    },
+    {
+      "id": "hls_stream_1",
+      "name": "HLS 串流",
+      "type": "HLS",
+      "location": "停車場",
+      "enabled": false,
+      "config": {
+        "url": "https://example.com/stream/playlist.m3u8",
+        "timeout": 30,
+        "buffer_segments": 3,
+        "headers": {
+          "User-Agent": "StreamMotionDetect/1.0"
+        }
+      }
+    },
+    {
+      "id": "dash_stream_1",
+      "name": "DASH 串流",
+      "type": "DASH",
+      "location": "會議室",
+      "enabled": false,
+      "config": {
+        "url": "https://example.com/stream/manifest.mpd",
+        "timeout": 30,
+        "buffer_duration": 10,
+        "headers": {
+          "User-Agent": "StreamMotionDetect/1.0"
+        }
+      }
+    },
+    {
+      "id": "webrtc_stream_1",
+      "name": "WebRTC 串流",
+      "type": "WEBRTC",
+      "location": "遠端辦公室",
+      "enabled": false,
+      "config": {
+        "signaling_url": "wss://signaling.example.com/ws",
+        "ice_servers": [
+          {
+            "urls": "stun:stun.l.google.com:19302"
+          },
+          {
+            "urls": "turn:turn.example.com:3478",
+            "username": "user",
+            "credential": "pass"
+          }
+        ],
+        "stream_id": "camera1"
+      }
+    },
+    {
+      "id": "onvif_camera_1",
+      "name": "ONVIF 攝影機",
+      "type": "ONVIF",
+      "location": "後門",
+      "enabled": false,
+      "config": {
+        "host": "192.168.1.102",
+        "port": 80,
+        "username": "admin",
+        "password": "admin123",
+        "profile_token": "Profile_1",
+        "service_url": "http://192.168.1.102/onvif/device_service",
+        "media_url": "http://192.168.1.102/onvif/media_service"
+      }
+    }
+  ],
+  "global_settings": {
+    "max_reconnect_attempts": 5,
+    "reconnect_delay": 5,
+    "frame_buffer_size": 10,
+    "processing_fps": 2,
+    "connection_timeout": 30,
+    "enable_auto_discovery": true,
+    "onvif_discovery_timeout": 10
+  },
+  "stream_profiles": {
+    "low_quality": {
+      "resolution": {
+        "width": 640,
+        "height": 480
+      },
+      "fps": 15,
+      "bitrate": "500k"
+    },
+    "medium_quality": {
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "fps": 25,
+      "bitrate": "2M"
+    },
+    "high_quality": {
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "fps": 30,
+      "bitrate": "5M"
+    }
+  }
+}

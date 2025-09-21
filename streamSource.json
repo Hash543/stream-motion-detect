@@ -1,0 +1,54 @@
+{
+  "stream_sources": [
+    {
+      "id": "webcam_local",
+      "name": "本地攝影機",
+      "type": "WEBCAM",
+      "location": "筆記本電腦",
+      "enabled": true,
+      "config": {
+        "device_index": 0,
+        "resolution": {
+          "width": 1280,
+          "height": 720
+        },
+        "fps": 30
+      }
+    }
+  ],
+  "global_settings": {
+    "max_reconnect_attempts": 5,
+    "reconnect_delay": 5,
+    "frame_buffer_size": 10,
+    "processing_fps": 2,
+    "connection_timeout": 30,
+    "enable_auto_discovery": true,
+    "onvif_discovery_timeout": 10
+  },
+  "stream_profiles": {
+    "low_quality": {
+      "resolution": {
+        "width": 640,
+        "height": 480
+      },
+      "fps": 15,
+      "bitrate": "500k"
+    },
+    "medium_quality": {
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "fps": 25,
+      "bitrate": "2M"
+    },
+    "high_quality": {
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "fps": 30,
+      "bitrate": "5M"
+    }
+  }
+}

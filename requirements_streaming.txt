@@ -1,0 +1,22 @@
+# 基本需求
+opencv-python>=4.8.0
+numpy>=1.21.0
+requests>=2.25.0
+
+# HTTP/HTTPS 串流支援 (已包含在基本需求中)
+
+# HLS 串流支援
+m3u8>=3.5.0
+
+# WebRTC 串流支援 (可選)
+# aiortc>=1.6.0
+# websockets>=11.0.0
+
+# ONVIF 串流支援 (可選)
+# onvif-zeep>=0.2.12
+
+# DASH 串流支援 (使用內建 XML 解析，無需額外套件)
+
+# 其他有用的套件
+Pillow>=9.0.0
+python-dateutil>=2.8.0
