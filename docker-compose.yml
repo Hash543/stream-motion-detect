@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # API服務
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stream-monitor-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - DATABASE_URL=sqlite:///./data/monitoring.db
+      - LOG_LEVEL=INFO
+      - TZ=Asia/Taipei
+    networks:
+      - monitor-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 監控服務 (處理影像串流和檢測)
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stream-monitor-service
+    restart: unless-stopped
+    command: python start_system.py
+    volumes:
+      - ./config:/app/config
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - DATABASE_URL=sqlite:///./data/monitoring.db
+      - LOG_LEVEL=INFO
+      - TZ=Asia/Taipei
+    networks:
+      - monitor-network
+    depends_on:
+      - api
+    # 如需使用GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Nginx反向代理 (可選)
+  nginx:
+    image: nginx:alpine
+    container_name: stream-monitor-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./screenshots:/app/screenshots:ro
+    networks:
+      - monitor-network
+    depends_on:
+      - api
+    # 可選配置
+
+networks:
+  monitor-network:
+    driver: bridge
+
+volumes:
+  screenshots:
+  logs:
+  data:
+  models:

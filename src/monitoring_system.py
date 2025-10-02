@@ -14,11 +14,14 @@ from .managers.universal_stream_manager import UniversalStreamManager
 from .managers.screenshot_manager import ScreenshotManager
 from .managers.notification_sender import NotificationSender
 from .managers.database_manager import DatabaseManager, ViolationRecord
+from .managers.rule_engine_manager import RuleEngineManager
 
 from .detectors.helmet_detector import HelmetDetector
 from .detectors.drowsiness_detector import DrowsinessDetector
 from .detectors.face_recognizer import FaceRecognizer
 from .managers.face_detection_manager import FaceDetectionManager
+from .managers.helmet_violation_manager import HelmetViolationManager
+from .managers.inactivity_detection_manager import InactivityDetectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ class MonitoringSystem:
         self.screenshot_manager = None
         self.notification_sender = None
         self.database_manager = None
+        self.rule_engine_manager = None
 
         # AI Detectors
         self.helmet_detector = None
@@ -41,6 +45,12 @@ class MonitoringSystem:
 
         # Face Detection Manager
         self.face_detection_manager = None
+
+        # Helmet Violation Manager
+        self.helmet_violation_manager = None
+
+        # Inactivity Detection Manager
+        self.inactivity_detection_manager = None
 
         # System state
         self.is_running = False
@@ -80,8 +90,8 @@ class MonitoringSystem:
             # Setup RTSP streams (legacy)
             self._setup_rtsp_streams()
 
-            # Setup universal streams
-            self._setup_universal_streams()
+            # # Setup universal streams
+            # self._setup_universal_streams()
 
             logger.info("System initialization completed successfully")
             return True
@@ -129,6 +139,10 @@ class MonitoringSystem:
         self.rtsp_manager = RTSPManager()
         self.rtsp_manager.set_processing_fps(self.config.detection_settings.processing_fps)
 
+        # Rule Engine manager
+        self.rule_engine_manager = RuleEngineManager()
+        self.rule_engine_manager.reload_rules()
+
         logger.info("All managers initialized")
 
     def _initialize_detectors(self) -> None:
@@ -155,15 +169,34 @@ class MonitoringSystem:
             )
             self.face_recognizer.load_model()
 
-            # Face Detection Manager with 10-second notification interval
+            # Face Detection Manager with 10-second notification interval and auto-filing
             self.face_detection_manager = FaceDetectionManager(
                 face_recognizer=self.face_recognizer,
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
-                notification_interval=10  # 10 seconds interval
+                database_manager=self.database_manager,  # 添加資料庫管理器
+                notification_interval=10,  # 10 seconds interval
+                auto_filing=True  # 啟用自動建檔
             )
 
-            logger.info("All AI detectors and face detection manager initialized")
+            # Helmet Violation Manager with 20-second screenshot interval
+            # 只在偵測到人臉時進行安全帽檢測
+            self.helmet_violation_manager = HelmetViolationManager(
+                helmet_detector=self.helmet_detector,
+                notification_sender=self.notification_sender,
+                screenshot_manager=self.screenshot_manager,
+                screenshot_interval=20  # 20 seconds interval for same person
+            )
+
+            # Inactivity Detection Manager
+            # 檢測30秒內沒有人臉且沒有動作的情況
+            self.inactivity_detection_manager = InactivityDetectionManager(
+                inactivity_threshold=30,  # 30 seconds of inactivity
+                motion_threshold=5.0,     # Motion detection threshold
+                check_interval=30         # Check interval
+            )
+
+            logger.info("All AI detectors and managers initialized")
 
         except Exception as e:
             logger.error(f"Failed to initialize detectors: {e}")
@@ -293,6 +326,10 @@ class MonitoringSystem:
             self.face_recognizer.cleanup()
         if self.face_detection_manager:
             self.face_detection_manager.cleanup()
+        if self.helmet_violation_manager:
+            self.helmet_violation_manager.cleanup()
+        if self.inactivity_detection_manager:
+            self.inactivity_detection_manager.cleanup()
 
         logger.info("RTSP Monitoring System stopped")
 
@@ -319,35 +356,87 @@ class MonitoringSystem:
         try:
             self.stats["total_frames_processed"] += 1
 
-            # Process face detection with automatic filing and notification interval control
-            if self.face_detection_manager:
+            # Get stream type and enabled detection types from Rule Engine
+            stream_type = self._get_stream_type(camera_id)
+            enabled_detection_types = self.rule_engine_manager.get_enabled_detection_types(
+                stream_id=camera_id,
+                stream_type=stream_type
+            )
+
+            if not enabled_detection_types:
+                logger.debug(f"No enabled detection types for {camera_id}, skipping frame")
+                return
+
+            logger.debug(f"Enabled detection types for {camera_id}: {enabled_detection_types}")
+
+            # Always run face recognition for violation association (needed by other detectors)
+            face_detections = self.face_recognizer.detect(frame)
+
+            # Process face detection only if 'face' is in enabled types
+            if 'face' in enabled_detection_types and self.face_detection_manager:
                 face_detection_results = self.face_detection_manager.process_frame(frame, camera_id)
                 if face_detection_results:
                     logger.debug(f"Face detection results: {len(face_detection_results)} faces processed")
 
-            # Run face recognition for violation association
-            face_detections = self.face_recognizer.detect(frame)
+            # Process inactivity detection only if 'inactivity' is in enabled types
+            if 'inactivity' in enabled_detection_types and self.inactivity_detection_manager:
+                inactivity_detections = self.inactivity_detection_manager.process_frame(
+                    frame, camera_id, face_detections
+                )
+                # Handle inactivity violations
+                for violation in inactivity_detections:
+                    self._handle_violation(camera_id, frame, violation, face_detections, timestamp)
 
-            # Run helmet detection
-            helmet_violations = self.helmet_detector.detect_helmet_violations(frame)
+            # Process helmet detection only if 'helmet' is in enabled types
+            if 'helmet' in enabled_detection_types and self.helmet_violation_manager:
+                helmet_violation_results = self.helmet_violation_manager.process_frame(
+                    frame, camera_id, face_detections
+                )
+                if helmet_violation_results:
+                    logger.debug(
+                        f"Helmet violation results: {len(helmet_violation_results)} "
+                        f"violations processed with interval control"
+                    )
 
-            # Run drowsiness detection
-            drowsiness_detections = self.drowsiness_detector.detect(frame)
-
-            # Process violations
-            all_violations = helmet_violations + drowsiness_detections
-
-            for violation in all_violations:
-                self._handle_violation(camera_id, frame, violation, face_detections, timestamp)
+            # Process drowsiness detection only if 'drowsiness' is in enabled types
+            if 'drowsiness' in enabled_detection_types and self.drowsiness_detector:
+                drowsiness_detections = self.drowsiness_detector.detect(frame)
+                # Handle drowsiness violations
+                for violation in drowsiness_detections:
+                    self._handle_violation(camera_id, frame, violation, face_detections, timestamp)
 
         except Exception as e:
             logger.error(f"Error processing frame from {camera_id}: {e}")
 
     def _handle_violation(self, camera_id: str, frame, violation, face_detections, timestamp: datetime) -> None:
-        """Handle a detected violation"""
+        """Handle a detected violation - check against Rule Engine first"""
         try:
             # Find associated person if possible
             person_id = self._associate_violation_with_person(violation, face_detections)
+
+            # Get stream type from stream manager
+            stream_type = self._get_stream_type(camera_id)
+
+            # Check Rule Engine to see if we should process this violation
+            should_trigger, matched_rule = self.rule_engine_manager.should_trigger_violation(
+                stream_id=camera_id,
+                stream_type=stream_type,
+                detection_type=violation.detection_type,
+                confidence=violation.confidence,
+                person_id=person_id
+            )
+
+            if not should_trigger:
+                logger.debug(
+                    f"Violation {violation.detection_type} on {camera_id} "
+                    f"filtered by Rule Engine (no matching rule or confidence too low)"
+                )
+                return
+
+            logger.info(
+                f"Rule Engine matched: {matched_rule['name']} "
+                f"for {violation.detection_type} on {camera_id}"
+            )
 
             # Take screenshot
             image_path = self.screenshot_manager.take_screenshot(
@@ -379,26 +468,39 @@ class MonitoringSystem:
 
             self.database_manager.add_violation(violation_record)
 
-            # # Send notification
-            # success = self.notification_sender.send_violation_notification(
-            #     camera_id=camera_id,
-            #     violation_type=violation.detection_type,
-            #     person_id=person_id,
-            #     confidence=violation.confidence,
-            #     image_path=image_path or "",
-            #     bbox=violation.bbox
-            # )
+            # Send notification if enabled in rule
+            if matched_rule.get('notification_enabled', True):
+                success = self.notification_sender.send_violation_notification(
+                    camera_id=camera_id,
+                    violation_type=violation.detection_type,
+                    person_id=person_id,
+                    confidence=violation.confidence,
+                    image_path=image_path or "",
+                    bbox=violation.bbox
+                )
 
-            # if success:
-            #     self.stats["notifications_sent"] += 1
+                if success:
+                    self.stats["notifications_sent"] += 1
 
             self.stats["violations_detected"] += 1
 
-            logger.warning(f"VIOLATION DETECTED: {violation.detection_type} on {camera_id} "
-                         f"(confidence: {violation.confidence:.2f}, person: {person_id or 'unknown'})")
+            logger.warning(
+                f"VIOLATION DETECTED: {violation.detection_type} on {camera_id} "
+                f"(confidence: {violation.confidence:.2f}, person: {person_id or 'unknown'}, "
+                f"rule: {matched_rule['name']})"
+            )
 
         except Exception as e:
             logger.error(f"Error handling violation: {e}")
+
+    def _get_stream_type(self, camera_id: str) -> str:
+        """Get stream type for a camera"""
+        # Check in universal stream manager first
+        if camera_id in self.stream_manager.streams:
+            stream = self.stream_manager.streams[camera_id]
+            return stream.stream_type
+        # Default to RTSP for legacy streams
+        return "rtsp"
 
     def _associate_violation_with_person(self, violation, face_detections) -> Optional[str]:
         """Associate a violation with a detected person"""
@@ -468,6 +570,10 @@ class MonitoringSystem:
             status["managers"]["database"] = self.database_manager.get_database_info()
         if self.face_detection_manager:
             status["managers"]["face_detection"] = self.face_detection_manager.get_stats()
+        if self.helmet_violation_manager:
+            status["managers"]["helmet_violation"] = self.helmet_violation_manager.get_stats()
+        if self.inactivity_detection_manager:
+            status["managers"]["inactivity_detection"] = self.inactivity_detection_manager.get_stats()
 
         return status
 
@@ -491,6 +597,27 @@ class MonitoringSystem:
             self.face_detection_manager.reset_notification_history(person_id)
             return True
         return False
+
+    def set_helmet_screenshot_interval(self, interval_seconds: int) -> bool:
+        """Set helmet violation screenshot interval"""
+        if self.helmet_violation_manager:
+            self.helmet_violation_manager.set_screenshot_interval(interval_seconds)
+            logger.info(f"Helmet screenshot interval set to {interval_seconds} seconds")
+            return True
+        return False
+
+    def reset_helmet_screenshot_history(self, person_id: Optional[str] = None) -> bool:
+        """Reset helmet violation screenshot history for testing"""
+        if self.helmet_violation_manager:
+            self.helmet_violation_manager.reset_screenshot_history(person_id)
+            return True
+        return False
+
+    def get_helmet_violation_history(self, person_id: Optional[str] = None, days: int = 7) -> List[Dict]:
+        """Get helmet violation history"""
+        if self.helmet_violation_manager:
+            return self.helmet_violation_manager.get_violation_history(person_id, days)
+        return []
 
     def add_person_to_database(self, person_id: str, name: str,
                               face_images: List, additional_info: Optional[Dict] = None) -> bool:

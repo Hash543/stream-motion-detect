@@ -13,6 +13,7 @@ import hashlib
 from ..detectors.face_recognizer import FaceRecognizer
 from .notification_sender import NotificationSender, ViolationNotification
 from .screenshot_manager import ScreenshotManager
+from .database_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +38,27 @@ class FaceDetectionManager:
                  face_recognizer: FaceRecognizer,
                  notification_sender: Optional[NotificationSender] = None,
                  screenshot_manager: Optional[ScreenshotManager] = None,
+                 database_manager: Optional[DatabaseManager] = None,
                  notification_interval: int = 10,  # 通知間隔秒數
-                 records_dir: str = "data/face_detections"):
+                 records_dir: str = "data/face_detections",
+                 auto_filing: bool = True):  # 自動建檔功能開關
 
         self.face_recognizer = face_recognizer
         self.notification_sender = notification_sender
         self.screenshot_manager = screenshot_manager
+        self.database_manager = database_manager
         self.notification_interval = notification_interval
         self.records_dir = Path(records_dir)
+        self.auto_filing = auto_filing
 
         # 確保目錄存在
         self.records_dir.mkdir(parents=True, exist_ok=True)
 
         # 追蹤最後通知時間，避免同一人短時間內重複通知
         self.last_notification_time: Dict[str, datetime] = {}
+
+        # 追蹤已建檔的人員，避免重複建檔操作
+        self.filed_persons: set = set()
 
         # 檢測記錄緩存
         self.detection_records: List[FaceDetectionRecord] = []
@@ -61,6 +69,7 @@ class FaceDetectionManager:
             "unique_persons_detected": 0,
             "notifications_sent": 0,
             "records_saved": 0,
+            "persons_filed": 0,  # 新增：建檔人數統計
             "start_time": datetime.now()
         }
 
@@ -125,6 +134,11 @@ class FaceDetectionManager:
             # 保存記錄到文件
             self._save_detection_record(record)
 
+            # 自動建檔到資料庫
+            person_filed = False
+            if self.auto_filing and self.database_manager and person_id != "unknown":
+                person_filed = self._ensure_person_filing(person_id, person_name, camera_id, confidence)
+
             # 發送通知
             if should_notify and self.notification_sender and image_path:
                 self._send_face_detection_notification(record)
@@ -134,7 +148,7 @@ class FaceDetectionManager:
                     self.last_notification_time[person_id] = current_time
 
             # 更新統計
-            self._update_stats(person_id, should_notify)
+            self._update_stats(person_id, should_notify, person_filed)
 
             return {
                 "person_id": person_id,
@@ -149,6 +163,48 @@ class FaceDetectionManager:
         except Exception as e:
             logger.error(f"Error processing detection for {detection.person_id}: {e}")
             return None
+
+    def _ensure_person_filing(self, person_id: str, person_name: str,
+                            camera_id: str, confidence: float) -> bool:
+        """確保人員已建檔到資料庫"""
+        try:
+            is_new_filing = person_id not in self.filed_persons
+
+            # 嘗試建檔或更新人員記錄
+            additional_info = {
+                'detection_source': 'face_recognition',
+                'first_detected_camera': camera_id,
+                'first_detection_confidence': confidence
+            }
+
+            success = self.database_manager.ensure_person_exists(
+                person_id=person_id,
+                name=person_name,
+                additional_info=additional_info
+            )
+
+            if success:
+                # 更新最後出現資訊
+                self.database_manager.update_person_last_seen(
+                    person_id=person_id,
+                    camera_id=camera_id,
+                    confidence=confidence
+                )
+
+                # 標記為已建檔
+                with self._lock:
+                    self.filed_persons.add(person_id)
+
+                if is_new_filing:
+                    logger.info(f"New person filed to database: {person_id} ({person_name})")
+                else:
+                    logger.debug(f"Person filing updated: {person_id} ({person_name})")
+
+            return success and is_new_filing  # 只有新建檔才回傳True
+
+        except Exception as e:
+            logger.error(f"Failed to ensure person filing for {person_id}: {e}")
+            return False
 
     def _should_send_notification(self, person_id: str, current_time: datetime) -> bool:
         """檢查是否應該發送通知（基於時間間隔）"""
@@ -268,7 +324,7 @@ class FaceDetectionManager:
         except Exception as e:
             logger.error(f"Failed to send face detection notification: {e}")
 
-    def _update_stats(self, person_id: str, notification_sent: bool) -> None:
+    def _update_stats(self, person_id: str, notification_sent: bool, person_filed: bool = False) -> None:
         """更新統計數據"""
         with self._lock:
             self.stats["total_detections"] += 1
@@ -276,6 +332,9 @@ class FaceDetectionManager:
 
             if notification_sent:
                 self.stats["notifications_sent"] += 1
+
+            if person_filed:
+                self.stats["persons_filed"] += 1
 
             # 統計唯一人員數量
             unique_persons = len(self.last_notification_time)
@@ -352,3 +411,4 @@ class FaceDetectionManager:
         with self._lock:
             self.detection_records.clear()
             self.last_notification_time.clear()
+            self.filed_persons.clear()

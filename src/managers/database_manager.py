@@ -310,6 +310,82 @@ class DatabaseManager:
             logger.error(f"Failed to get all persons: {e}")
             return []
 
+    def ensure_person_exists(self, person_id: str, name: str = None,
+                           department: str = None, additional_info: Dict = None) -> bool:
+        """Check if person exists, if not create a new record"""
+        try:
+            # First check if person exists
+            existing_person = self.get_person(person_id)
+
+            if existing_person:
+                # Person exists, update timestamp and return
+                with self._lock:
+                    with self._get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE persons SET updated_at = ? WHERE person_id = ?
+                        ''', (datetime.now().isoformat(), person_id))
+                        conn.commit()
+                logger.debug(f"Updated timestamp for existing person: {person_id}")
+                return True
+            else:
+                # Person doesn't exist, create new record
+                person_name = name or f"Person_{person_id}"
+                additional_info_json = json.dumps(additional_info) if additional_info else None
+
+                person_record = PersonRecord(
+                    person_id=person_id,
+                    name=person_name,
+                    department=department,
+                    additional_info=additional_info_json
+                )
+
+                success = self.add_person(person_record)
+                if success:
+                    logger.info(f"Created new person record: {person_id} ({person_name})")
+                return success
+
+        except Exception as e:
+            logger.error(f"Failed to ensure person exists for {person_id}: {e}")
+            return False
+
+    def update_person_last_seen(self, person_id: str, camera_id: str, confidence: float) -> bool:
+        """Update person's last seen information"""
+        try:
+            with self._lock:
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+
+                    # Get current additional_info
+                    cursor.execute("SELECT additional_info FROM persons WHERE person_id = ?", (person_id,))
+                    row = cursor.fetchone()
+
+                    if row:
+                        current_info = json.loads(row[0]) if row[0] else {}
+
+                        # Update last seen info
+                        current_info.update({
+                            'last_seen_at': datetime.now().isoformat(),
+                            'last_seen_camera': camera_id,
+                            'last_detection_confidence': confidence
+                        })
+
+                        # Update the record
+                        cursor.execute('''
+                            UPDATE persons
+                            SET updated_at = ?, additional_info = ?
+                            WHERE person_id = ?
+                        ''', (datetime.now().isoformat(), json.dumps(current_info), person_id))
+
+                        conn.commit()
+                        return True
+
+                    return False
+
+        except Exception as e:
+            logger.error(f"Failed to update last seen for {person_id}: {e}")
+            return False
+
     def add_camera(self, camera: CameraRecord) -> bool:
         """Add a camera record to the database"""
         try:

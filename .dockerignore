@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Data and Logs
+logs/*.log
+data/*.db
+screenshots/*
+test_screenshots/*
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Test files
+test_*.py
+tests/
+
+# Config (should be mounted)
+config/config.json
+streamSource.json
+
+# Models (should be mounted)
+models/*.pt
+models/*.pkl
+
+# Others
+.env
+*.bak
+*.tmp

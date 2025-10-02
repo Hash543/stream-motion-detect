@@ -2,13 +2,8 @@
   "rtsp_sources": [
     {
       "id": "camera_001",
-      "url": "rtsp://192.168.1.100:554/stream1",
-      "location": "工廠入口"
-    },
-    {
-      "id": "camera_002",
-      "url": "rtsp://192.168.1.101:554/stream1",
-      "location": "生產線A"
+      "url": "rtsp://jpku:au6aae@192.168.9.221/live.sdp",
+      "location": "桃園辦公室"
     }
   ],
   "detection_settings": {
