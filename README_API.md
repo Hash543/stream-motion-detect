@@ -11,12 +11,12 @@ pip install -r requirements-api.txt
 
 2. **啟動API服務**:
 ```bash
-python -m uvicorn api.main:app --reload --port 8000
+python -m uvicorn api.main:app --reload --port 8282
 ```
 
 3. **訪問API文件**:
-- Swagger UI: http://localhost:8000/api/docs
-- ReDoc: http://localhost:8000/api/redoc
+- Swagger UI: http://localhost:8282/api/docs
+- ReDoc: http://localhost:8282/api/redoc
 
 ### Docker部署
 
@@ -35,7 +35,7 @@ docker-compose down
 2. **單獨建置Docker映像**:
 ```bash
 docker build -t stream-monitor:latest .
-docker run -d -p 8000:8000 stream-monitor:latest
+docker run -d -p 8000:8282 stream-monitor:latest
 ```
 
 ## 📋 API功能概覽
@@ -44,7 +44,7 @@ docker run -d -p 8000:8000 stream-monitor:latest
 
 ```bash
 # 建立人員
-curl -X POST http://localhost:8000/api/persons \
+curl -X POST http://localhost:8282/api/persons \
   -H "Content-Type: application/json" \
   -d '{
     "person_id": "emp_001",
@@ -53,19 +53,19 @@ curl -X POST http://localhost:8000/api/persons \
   }'
 
 # 上傳人臉照片
-curl -X POST http://localhost:8000/api/persons/emp_001/face-encoding \
+curl -X POST http://localhost:8282/api/persons/emp_001/face-encoding \
   -F "images=@photo1.jpg" \
   -F "images=@photo2.jpg"
 
 # 取得人員列表
-curl http://localhost:8000/api/persons
+curl http://localhost:8282/api/persons
 ```
 
 ### 2. 影像來源CRUD
 
 ```bash
 # 建立RTSP影像來源
-curl -X POST http://localhost:8000/api/streams \
+curl -X POST http://localhost:8282/api/streams \
   -H "Content-Type: application/json" \
   -d '{
     "stream_id": "camera_001",
@@ -77,20 +77,20 @@ curl -X POST http://localhost:8000/api/streams \
   }'
 
 # 取得影像來源列表
-curl http://localhost:8000/api/streams
+curl http://localhost:8282/api/streams
 
 # 啟用影像來源
-curl -X POST http://localhost:8000/api/streams/camera_001/enable
+curl -X POST http://localhost:8282/api/streams/camera_001/enable
 
 # 測試連接
-curl -X POST http://localhost:8000/api/streams/camera_001/test
+curl -X POST http://localhost:8282/api/streams/camera_001/test
 ```
 
 ### 3. 規則引擎配置
 
 ```bash
 # 建立安全帽檢測規則
-curl -X POST http://localhost:8000/api/rules \
+curl -X POST http://localhost:8282/api/rules \
   -H "Content-Type: application/json" \
   -d '{
     "rule_id": "rule_helmet_001",
@@ -103,7 +103,7 @@ curl -X POST http://localhost:8000/api/rules \
   }'
 
 # 使用範本快速建立規則
-curl -X POST "http://localhost:8000/api/rules/templates/helmet_detection/apply" \
+curl -X POST "http://localhost:8282/api/rules/templates/helmet_detection/apply" \
   -H "Content-Type: application/json" \
   -d '{
     "rule_id": "rule_002",
@@ -112,20 +112,20 @@ curl -X POST "http://localhost:8000/api/rules/templates/helmet_detection/apply" 
   }'
 
 # 測試規則
-curl -X POST http://localhost:8000/api/rules/rule_helmet_001/test
+curl -X POST http://localhost:8282/api/rules/rule_helmet_001/test
 ```
 
 ### 4. 違規記錄查詢
 
 ```bash
 # 查詢違規記錄
-curl "http://localhost:8000/api/violations?limit=10&status=new"
+curl "http://localhost:8282/api/violations?limit=10&status=new"
 
 # 取得違規統計
-curl "http://localhost:8000/api/violations/statistics/summary?days=7"
+curl "http://localhost:8282/api/violations/statistics/summary?days=7"
 
 # 確認違規
-curl -X POST http://localhost:8000/api/violations/{violation_id}/acknowledge \
+curl -X POST http://localhost:8282/api/violations/{violation_id}/acknowledge \
   -H "Content-Type: application/json" \
   -d '{
     "acknowledged_by": "manager_01",
@@ -293,7 +293,7 @@ deploy:
 import requests
 
 class MonitorAPI:
-    def __init__(self, base_url="http://localhost:8000"):
+    def __init__(self, base_url="http://localhost:8282"):
         self.base_url = base_url
 
     def create_stream(self, stream_data):
@@ -343,7 +343,7 @@ violations = api.get_violations(status="new", limit=10)
 
 ```javascript
 class MonitorAPI {
-    constructor(baseUrl = 'http://localhost:8000') {
+    constructor(baseUrl = 'http://localhost:8282') {
         this.baseUrl = baseUrl;
     }
 
@@ -396,13 +396,13 @@ tail -f logs/monitoring.log
 ### 健康檢查
 
 ```bash
-curl http://localhost:8000/api/health
+curl http://localhost:8282/api/health
 ```
 
 ### 系統資訊
 
 ```bash
-curl http://localhost:8000/api/info
+curl http://localhost:8282/api/info
 ```
 
 ## 📚 更多文件
@@ -419,7 +419,7 @@ curl http://localhost:8000/api/info
 修改 `docker-compose.yml`:
 ```yaml
 ports:
-  - "9000:8000"  # 將8000改為9000
+  - "9000:8282"  # 將8000改為9000
 ```
 
 或本地啟動時：
@@ -457,5 +457,5 @@ docker-compose up -d
 ## 📞 技術支援
 
 - GitHub Issues: [報告問題]
-- API測試: http://localhost:8000/api/docs
+- API測試: http://localhost:8282/api/docs
 - 文件: [完整文件](docs/)

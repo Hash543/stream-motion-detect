@@ -4,9 +4,14 @@ Stream Source Management API Routes
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
+import cv2
+import numpy as np
+import time
+import asyncio
 
 from api.database import get_db
 from api.models import StreamSource
@@ -279,3 +284,126 @@ async def test_stream_connection(stream_id: str, db: Session = Depends(get_db)):
             "message": "Stream connection test failed",
             "error": str(e)
         }
+
+
+# Global variable to store monitoring system instance (will be set by main.py)
+_monitoring_system = None
+
+def set_monitoring_system(system):
+    """設置監控系統實例"""
+    global _monitoring_system
+    _monitoring_system = system
+
+
+@router.get("/{stream_id}/video")
+async def get_video_stream(stream_id: str, db: Session = Depends(get_db)):
+    """
+    取得影像來源的MJPEG串流
+
+    - **stream_id**: 串流ID
+
+    前端使用範例:
+    ```html
+    <img src="http://localhost:8000/api/streams/camera1/video" />
+    ```
+    或使用JavaScript:
+    ```javascript
+    const img = document.getElementById('stream-img');
+    img.src = 'http://localhost:8000/api/streams/camera1/video';
+    ```
+    """
+    # 檢查串流是否存在於資料庫
+    stream = db.query(StreamSource).filter(StreamSource.stream_id == stream_id).first()
+    if not stream:
+        raise HTTPException(status_code=404, detail="Stream source not found")
+
+    if not stream.enabled:
+        raise HTTPException(status_code=400, detail="Stream is not enabled")
+
+    async def generate_frames():
+        """生成MJPEG串流幀"""
+        try:
+            logger.info(f"Starting MJPEG stream for: {stream_id}")
+
+            while True:
+                # 從監控系統獲取最新幀
+                frame = None
+
+                if _monitoring_system is None:
+                    # 如果監控系統未初始化，返回錯誤幀
+                    logger.warning("Monitoring system not initialized")
+                    frame = _create_error_frame("Monitoring system not initialized")
+                else:
+                    # 嘗試從RTSP管理器獲取幀
+                    if hasattr(_monitoring_system, 'rtsp_manager') and _monitoring_system.rtsp_manager:
+                        rtsp_stream = _monitoring_system.rtsp_manager.streams.get(stream_id)
+                        if rtsp_stream and rtsp_stream.is_running:
+                            frame_data = rtsp_stream.get_latest_frame()
+                            if frame_data:
+                                frame, _ = frame_data
+
+                    # 如果RTSP沒有，嘗試從通用串流管理器獲取
+                    if frame is None and hasattr(_monitoring_system, 'stream_manager') and _monitoring_system.stream_manager:
+                        universal_stream = _monitoring_system.stream_manager.streams.get(stream_id)
+                        if universal_stream and hasattr(universal_stream, 'is_running') and universal_stream.is_running:
+                            frame_data = universal_stream.get_latest_frame()
+                            if frame_data:
+                                frame, _ = frame_data
+
+                # 如果沒有獲取到幀，創建提示圖像
+                if frame is None:
+                    frame = _create_error_frame(f"No frame available for {stream_id}")
+
+                # 將幀編碼為JPEG
+                try:
+                    _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    frame_bytes = buffer.tobytes()
+
+                    # 生成MJPEG格式
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                except Exception as e:
+                    logger.error(f"Error encoding frame: {e}")
+                    error_frame = _create_error_frame(f"Encoding error: {str(e)}")
+                    _, buffer = cv2.imencode('.jpg', error_frame)
+                    frame_bytes = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+                # 控制幀率 (約15 FPS，適合網頁顯示)
+                await asyncio.sleep(0.066)
+
+        except GeneratorExit:
+            logger.info(f"Client disconnected from stream: {stream_id}")
+        except Exception as e:
+            logger.error(f"Error in MJPEG stream generator for {stream_id}: {e}")
+
+    return StreamingResponse(
+        generate_frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+    )
+
+
+def _create_error_frame(message: str) -> np.ndarray:
+    """創建錯誤提示圖像"""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    # 添加文字
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.7
+    font_thickness = 2
+
+    # 計算文字大小以居中顯示
+    text_size = cv2.getTextSize(message, font, font_scale, font_thickness)[0]
+    text_x = (frame.shape[1] - text_size[0]) // 2
+    text_y = (frame.shape[0] + text_size[1]) // 2
+
+    # 繪製文字
+    cv2.putText(frame, message, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+
+    return frame

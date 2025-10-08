@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJPEG Stream Test - 影像串流測試</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-weight: bold;
+            min-width: 100px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .stream-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+
+        .stream-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .stream-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stream-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .remove-btn {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .remove-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .stream-body {
+            padding: 0;
+            position: relative;
+            background: #000;
+        }
+
+        .stream-img {
+            width: 100%;
+            height: auto;
+            display: block;
+            min-height: 400px;
+            object-fit: contain;
+        }
+
+        .stream-info {
+            padding: 15px;
+            background: #f5f5f5;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status.active {
+            background: #4caf50;
+            box-shadow: 0 0 10px #4caf50;
+        }
+
+        .status.error {
+            background: #f44336;
+            box-shadow: 0 0 10px #f44336;
+        }
+
+        .info-text {
+            margin-top: 10px;
+            font-size: 12px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .example-urls {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .example-urls h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .example-urls code {
+            display: block;
+            background: white;
+            padding: 8px;
+            border-radius: 3px;
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #e83e8c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📹 MJPEG 影像串流測試</h1>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="apiUrl">API 位址:</label>
+                <input type="text" id="apiUrl" value="http://localhost:8282" placeholder="http://localhost:8282">
+            </div>
+
+            <div class="control-group">
+                <label for="streamId">串流 ID:</label>
+                <input type="text" id="streamId" value="camera1" placeholder="camera1">
+                <button onclick="addStream()">➕ 新增串流</button>
+                <button onclick="loadStreams()">🔄 載入所有串流</button>
+            </div>
+
+            <div class="example-urls">
+                <h3>📝 範例串流 ID:</h3>
+                <code>camera1</code>
+                <code>rtsp_stream_1</code>
+                <code>webcam_0</code>
+                <small style="color: #666; display: block; margin-top: 10px;">
+                    💡 提示: 請確認您的 streamSource.json 或 config.json 中有配置這些串流 ID
+                </small>
+            </div>
+        </div>
+
+        <div id="streamGrid" class="stream-grid">
+            <!-- Streams will be added here dynamically -->
+        </div>
+    </div>
+
+    <script>
+        const streams = new Map();
+
+        function addStream() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const streamId = document.getElementById('streamId').value.trim();
+
+            if (!streamId) {
+                alert('請輸入串流 ID');
+                return;
+            }
+
+            if (streams.has(streamId)) {
+                alert('此串流已存在');
+                return;
+            }
+
+            const videoUrl = `${apiUrl}/api/streams/${streamId}/video`;
+            createStreamCard(streamId, videoUrl);
+        }
+
+        function createStreamCard(streamId, videoUrl) {
+            const grid = document.getElementById('streamGrid');
+            const card = document.createElement('div');
+            card.className = 'stream-card';
+            card.id = `stream-${streamId}`;
+
+            const now = new Date().toLocaleString('zh-TW');
+
+            card.innerHTML = `
+                <div class="stream-header">
+                    <div class="stream-title">
+                        <span class="status active"></span>
+                        ${streamId}
+                    </div>
+                    <button class="remove-btn" onclick="removeStream('${streamId}')">✖ 移除</button>
+                </div>
+                <div class="stream-body">
+                    <img
+                        class="stream-img"
+                        id="img-${streamId}"
+                        alt="Loading stream..."
+                        onerror="handleStreamError('${streamId}')"
+                        onload="handleStreamLoad('${streamId}')"
+                    >
+                </div>
+                <div class="stream-info">
+                    <div class="info-text">
+                        <strong>串流位址:</strong> <code>${videoUrl}</code><br>
+                        <strong>載入時間:</strong> ${now}<br>
+                        <strong>狀態:</strong> <span id="status-${streamId}">連接中...</span>
+                    </div>
+                </div>
+            `;
+
+            grid.appendChild(card);
+            streams.set(streamId, { url: videoUrl, element: card });
+
+            // 延遲設置 src 以確保元素已渲染
+            setTimeout(() => {
+                const img = document.getElementById(`img-${streamId}`);
+                if (img) {
+                    img.src = videoUrl;
+                }
+            }, 100);
+        }
+
+        function removeStream(streamId) {
+            const card = document.getElementById(`stream-${streamId}`);
+            if (card) {
+                // 停止圖片載入
+                const img = document.getElementById(`img-${streamId}`);
+                if (img) {
+                    img.src = '';
+                }
+                card.remove();
+                streams.delete(streamId);
+            }
+        }
+
+        function handleStreamLoad(streamId) {
+            const statusElement = document.getElementById(`status-${streamId}`);
+            if (statusElement) {
+                statusElement.innerHTML = '<span style="color: #4caf50;">✓ 串流正常</span>';
+            }
+
+            const card = document.getElementById(`stream-${streamId}`);
+            if (card) {
+                const statusDot = card.querySelector('.status');
+                if (statusDot) {
+                    statusDot.classList.remove('error');
+                    statusDot.classList.add('active');
+                }
+            }
+        }
+
+        function handleStreamError(streamId) {
+            const statusElement = document.getElementById(`status-${streamId}`);
+            if (statusElement) {
+                statusElement.innerHTML = '<span style="color: #f44336;">✗ 連接失敗 (請檢查 API 是否啟動或串流 ID 是否正確)</span>';
+            }
+
+            const card = document.getElementById(`stream-${streamId}`);
+            if (card) {
+                const statusDot = card.querySelector('.status');
+                if (statusDot) {
+                    statusDot.classList.remove('active');
+                    statusDot.classList.add('error');
+                }
+            }
+        }
+
+        async function loadStreams() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+
+            try {
+                const response = await fetch(`${apiUrl}/api/streams/`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const streamsList = await response.json();
+
+                if (streamsList.length === 0) {
+                    alert('沒有找到任何串流來源\n請先在資料庫中建立串流來源');
+                    return;
+                }
+
+                // 清空現有串流
+                streams.forEach((_, streamId) => removeStream(streamId));
+
+                // 載入所有啟用的串流
+                streamsList
+                    .filter(stream => stream.enabled)
+                    .forEach(stream => {
+                        const videoUrl = `${apiUrl}/api/streams/${stream.stream_id}/video`;
+                        createStreamCard(stream.stream_id, videoUrl);
+                    });
+
+                alert(`成功載入 ${streamsList.filter(s => s.enabled).length} 個串流`);
+
+            } catch (error) {
+                alert(`載入串流失敗: ${error.message}\n\n請確認:\n1. API 伺服器是否運行\n2. API 位址是否正確`);
+                console.error('Error loading streams:', error);
+            }
+        }
+
+        // 頁面載入時自動添加一個測試串流
+        window.addEventListener('load', () => {
+            console.log('MJPEG Stream Test Page Loaded');
+            console.log('請輸入串流 ID 並點擊「新增串流」按鈕');
+        });
+    </script>
+</body>
+</html>
