@@ -9,7 +9,7 @@ services:
     container_name: stream-monitor-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8282:8282"
     volumes:
       - ./config:/app/config
       - ./screenshots:/app/screenshots
@@ -23,7 +23,7 @@ services:
     networks:
       - monitor-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/health')"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8282/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
