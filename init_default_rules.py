@@ -155,7 +155,7 @@ def create_default_rules():
             rule_id="default_rtsp_comprehensive",
             name="RTSP攝影機綜合檢測",
             description="針對RTSP攝影機的所有檢測類型（不包含無活動檢測）",
-            stream_source_type="rtsp",
+            stream_source_type="RTSP",
             stream_source_ids=None,
             person_ids=None,
             detection_types=["helmet", "drowsiness", "face"],

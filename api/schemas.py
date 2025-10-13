@@ -26,6 +26,7 @@ class DetectionType(str, Enum):
     HELMET = "helmet"
     DROWSINESS = "drowsiness"
     FACE = "face"
+    INACTIVITY = "inactivity"
     CUSTOM = "custom"
 
 
