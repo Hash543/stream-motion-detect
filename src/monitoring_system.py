@@ -13,7 +13,6 @@ from .managers.rtsp_manager import RTSPManager
 from .managers.universal_stream_manager import UniversalStreamManager
 from .managers.screenshot_manager import ScreenshotManager
 from .managers.notification_sender import NotificationSender
-from .managers.database_manager import DatabaseManager, ViolationRecord
 from .managers.rule_engine_manager import RuleEngineManager
 
 from .detectors.helmet_detector import HelmetDetector
@@ -35,7 +34,6 @@ class MonitoringSystem:
         self.stream_manager = UniversalStreamManager(stream_config_path)
         self.screenshot_manager = None
         self.notification_sender = None
-        self.database_manager = None
         self.rule_engine_manager = None
 
         # AI Detectors
@@ -132,9 +130,6 @@ class MonitoringSystem:
             retry_attempts=self.config.notification_api.retry_attempts
         )
 
-        # Database manager
-        self.database_manager = DatabaseManager(self.config.database.url.replace("sqlite:///", ""))
-
         # RTSP manager
         self.rtsp_manager = RTSPManager()
         self.rtsp_manager.set_processing_fps(self.config.detection_settings.processing_fps)
@@ -169,14 +164,15 @@ class MonitoringSystem:
             )
             self.face_recognizer.load_model()
 
-            # Face Detection Manager with 10-second notification interval and auto-filing
+            # Face Detection Manager with 10-second notification interval
+            # Note: database_manager removed - use API instead
             self.face_detection_manager = FaceDetectionManager(
                 face_recognizer=self.face_recognizer,
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
-                database_manager=self.database_manager,  # 添加資料庫管理器
+                database_manager=None,  # Use API instead
                 notification_interval=10,  # 10 seconds interval
-                auto_filing=True  # 啟用自動建檔
+                auto_filing=False  # Disabled - use API instead
             )
 
             # Helmet Violation Manager with 20-second screenshot interval
@@ -214,15 +210,6 @@ class MonitoringSystem:
             # Set frame callback for each stream
             self.rtsp_manager.set_frame_callback(source.id, self._process_frame)
 
-            # Add camera to database
-            from .managers.database_manager import CameraRecord
-            camera_record = CameraRecord(
-                camera_id=source.id,
-                location=source.location,
-                rtsp_url=source.url
-            )
-            self.database_manager.add_camera(camera_record)
-
         logger.info(f"Setup {len(self.config.rtsp_sources)} legacy RTSP streams")
 
     def _setup_universal_streams(self) -> None:
@@ -236,15 +223,6 @@ class MonitoringSystem:
         for stream_id, stream in self.stream_manager.streams.items():
             # Set frame callback for each stream
             self.stream_manager.set_frame_callback(stream_id, self._process_frame)
-
-            # Add camera to database
-            from .managers.database_manager import CameraRecord
-            camera_record = CameraRecord(
-                camera_id=stream_id,
-                location=stream.location,
-                rtsp_url=getattr(stream, 'rtsp_url', '') or getattr(stream, 'url', '') or str(stream.config)
-            )
-            self.database_manager.add_camera(camera_record)
 
         success_count = sum(1 for success in results.values() if success)
         logger.info(f"Setup {success_count}/{len(results)} universal streams")
@@ -451,22 +429,8 @@ class MonitoringSystem:
             if image_path:
                 self.stats["screenshots_taken"] += 1
 
-            # Save to database
-            violation_record = ViolationRecord(
-                timestamp=timestamp,
-                camera_id=camera_id,
-                violation_type=violation.detection_type,
-                person_id=person_id,
-                confidence=violation.confidence,
-                bbox_x=violation.bbox[0],
-                bbox_y=violation.bbox[1],
-                bbox_width=violation.bbox[2],
-                bbox_height=violation.bbox[3],
-                image_path=image_path,
-                additional_data=json.dumps(violation.additional_data) if violation.additional_data else None
-            )
-
-            self.database_manager.add_violation(violation_record)
+            # Note: Violation recording removed - use API instead
+            # TODO: Call API to save violation record
 
             # Send notification if enabled in rule
             if matched_rule.get('notification_enabled', True):
@@ -566,8 +530,6 @@ class MonitoringSystem:
             status["managers"]["notification"] = self.notification_sender.get_stats()
         if self.screenshot_manager:
             status["managers"]["screenshot"] = self.screenshot_manager.get_storage_stats()
-        if self.database_manager:
-            status["managers"]["database"] = self.database_manager.get_database_info()
         if self.face_detection_manager:
             status["managers"]["face_detection"] = self.face_detection_manager.get_stats()
         if self.helmet_violation_manager:

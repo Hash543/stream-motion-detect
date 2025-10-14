@@ -23,8 +23,8 @@
     "image_quality": 95
   },
   "database": {
-    "type": "sqlite",
-    "url": "sqlite:///./data/monitoring.db"
+    "type": "mysql",
+    "url": "mysql+pymysql://facemotion:facemotion123@localhost/facemotion"
   },
   "models": {
     "helmet_model_path": "",
