@@ -23,8 +23,8 @@
     "image_quality": 95
   },
   "database": {
-    "type": "mysql",
-    "url": "mysql+pymysql://facemotion:facemotion123@localhost/facemotion"
+    "type": "postgresql",
+    "url": "postgresql+psycopg2://face-motion:kkk12345@localhost:5432/motion-detector"
   },
   "models": {
     "helmet_model_path": "",

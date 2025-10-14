@@ -1,28 +1,27 @@
 version: '3.8'
 
 services:
-  # MySQL 資料庫
+  # PostgreSQL 資料庫
   db:
-    image: mysql:8.0
-    container_name: stream-monitor-mysql
+    image: postgres:15-alpine
+    container_name: stream-monitor-postgres
     restart: unless-stopped
     environment:
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-facemotion}
-      - MYSQL_USER=${MYSQL_USER:-facemotion}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-facemotion123}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123}
+      - POSTGRES_DB=${POSTGRES_DATABASE:-motion-detector}
+      - POSTGRES_USER=${POSTGRES_USER:-face-motion}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkk12345}
       - TZ=Asia/Taipei
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - monitor-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-face-motion} -d ${POSTGRES_DATABASE:-motion-detector}"]
       interval: 10s
       timeout: 5s
       retries: 5
     ports:
-      - "3306:3306"
+      - "5432:5432"
 
   # API服務
   api:
@@ -40,10 +39,11 @@ services:
       - ./data:/app/data
       - ./models:/app/models
     environment:
-      - DB_HOST=db
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-facemotion}
-      - MYSQL_USERNAME=${MYSQL_USER:-facemotion}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-facemotion123}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-motion-detector}
+      - POSTGRES_USER=${POSTGRES_USER:-face-motion}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkk12345}
       - SESSION_SECRET=${SESSION_SECRET:-your-secret-key-change-this}
       - LOG_LEVEL=INFO
       - TZ=Asia/Taipei
@@ -74,10 +74,11 @@ services:
       - ./data:/app/data
       - ./models:/app/models
     environment:
-      - DB_HOST=db
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-facemotion}
-      - MYSQL_USERNAME=${MYSQL_USER:-facemotion}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-facemotion123}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-motion-detector}
+      - POSTGRES_USER=${POSTGRES_USER:-face-motion}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkk12345}
       - LOG_LEVEL=INFO
       - TZ=Asia/Taipei
       - AUTO_START=true
@@ -110,7 +111,6 @@ services:
       - monitor-network
     depends_on:
       - api
-    # 可選配置
 
 networks:
   monitor-network:
@@ -121,4 +121,4 @@ volumes:
   logs:
   data:
   models:
-  mysql_data:
+  postgres_data:
