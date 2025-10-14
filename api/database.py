@@ -26,15 +26,17 @@ else:
 # 創建引擎
 connect_args = {}
 engine_kwargs = {
-    "pool_size": 10,
-    "max_overflow": 20,
     "echo": False  # 設為 True 可以看到 SQL 查詢
 }
 
 if "sqlite" in DATABASE_URL:
+    # SQLite 不支援連接池參數
     connect_args = {"check_same_thread": False}
 elif "mysql" in DATABASE_URL:
+    # MySQL 連接池設定
     connect_args = {"connect_timeout": 60}
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
     engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_recycle"] = 3600
 
