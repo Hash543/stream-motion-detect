@@ -128,3 +128,228 @@ class SystemLog(Base):
     message = Column(Text)
     details = Column(JSON)
     created_at = Column(DateTime, default=datetime.now)
+
+
+# ==================== Face Motion 整合模型 ====================
+
+class User(Base):
+    """使用者資料表"""
+    __tablename__ = "user"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String(255), unique=True, nullable=False, index=True)
+    user_name = Column(String(255))
+    password = Column(String(255), nullable=False)
+    org_id = Column(Integer, ForeignKey("organization.id"))
+    role_id = Column(Integer, ForeignKey("role.id"))
+    status = Column(Integer, default=1)  # 1:active, 0:inactive, 2:deleted
+    position_id = Column(Integer, ForeignKey("positions.id"))
+    created_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_id = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class Role(Base):
+    """角色資料表"""
+    __tablename__ = "role"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    role_name = Column(String(255), nullable=False)
+    alias_name = Column(String(255))
+    org_id = Column(Integer, ForeignKey("organization.id"))
+    created_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_id = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class Organization(Base):
+    """組織資料表"""
+    __tablename__ = "organization"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    full_name = Column(String(255))
+    pid = Column(Integer, ForeignKey("organization.id"))
+    org_type = Column(String(100))
+    tel = Column(String(50))
+    address = Column(String(500))
+    gui_no = Column(String(50))
+    bank_code = Column(String(50))
+    bank_num = Column(String(100))
+    remarks = Column(Text)
+    contact_person = Column(String(100))
+    contact_ext = Column(String(50))
+    contact_tel = Column(String(50))
+    contact_email = Column(String(255))
+    created_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_id = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class Positions(Base):
+    """職位資料表"""
+    __tablename__ = "positions"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    posi_name = Column(String(255), nullable=False)
+    posi_level = Column(Integer)
+    posi_code = Column(String(50))
+    org_id = Column(Integer, ForeignKey("organization.id"))
+    created_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_id = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class AlertEvent(Base):
+    """警報事件資料表"""
+    __tablename__ = "alert_event"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    camera_id = Column(Text)
+    code = Column(String(255))
+    type = Column(String(255))
+    length = Column(String(255))
+    area = Column(Text)
+    time = Column(DateTime)
+    severity = Column(Text)
+    image = Column(Text)
+    resized_image = Column(Text)
+    lat = Column(Float)
+    lng = Column(Float)
+    address = Column(Text)
+    note = Column(Text)
+    handle_note = Column(Text)
+    report_status = Column(Integer, default=1)  # 1:未處理, 2:處理中, 3:已處理
+    image1 = Column(Text)
+    image2 = Column(Text)
+    image3 = Column(Text)
+    image4 = Column(Text)
+    image5 = Column(Text)
+    order_no = Column(Text)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class AlertEventAssignUser(Base):
+    """警報事件分配使用者關聯表"""
+    __tablename__ = "alert_event_assign_user"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ae_id = Column(Integer, ForeignKey("alert_event.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.now)
+    status = Column(Integer, default=1)  # 1:待處理, 2:處理中, 3:已完成
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class GPS808(Base):
+    """GPS808 位置追蹤資料表"""
+    __tablename__ = "gps808"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    device_id = Column(String(50), index=True, comment="設備ID")
+    mobile_no = Column(String(20), comment="SIM卡號")
+    plate_no = Column(String(20), comment="車牌號碼")
+    protocol_version = Column(Integer, comment="協議版本")
+
+    warn_bit = Column(Integer, comment="告警標誌")
+    status_bit = Column(Integer, comment="狀態標誌")
+    latitude = Column(Integer, comment="原始緯度")
+    longitude = Column(Integer, comment="原始經度")
+    lat = Column(Float, comment="轉換後緯度")
+    lng = Column(Float, comment="轉換後經度")
+    altitude = Column(Integer, comment="海拔 (m)")
+    speed = Column(Float, comment="速度 (m/s)")
+    speed_kph = Column(Float, comment="速度 (km/h)")
+    direction = Column(Integer, comment="方向 (度)")
+
+    device_time = Column(DateTime, comment="設備時間")
+    created_at = Column(DateTime, default=datetime.now, comment="數據接收時間")
+
+
+class Permission(Base):
+    """權限資料表"""
+    __tablename__ = "permission"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    permission_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class RolePermission(Base):
+    """角色權限關聯表"""
+    __tablename__ = "role_permission"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    role_id = Column(Integer, ForeignKey("role.id"), nullable=False)
+    permission_id = Column(Integer, ForeignKey("permission.id"), nullable=False)
+    can_access = Column(Boolean, default=False)
+    can_edit = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class InspectProperty(Base):
+    """設備資產資料表"""
+    __tablename__ = "inspect_property"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    code = Column(String(255), comment="設備編號")
+    prop_type = Column(Integer, comment="設備類型，1:車輛, 2:GPS, 3:攝像頭")
+    plate = Column(String(255), comment="車牌")
+    prop_location = Column(String(255), comment="位置")
+    brand = Column(String(255), comment="品牌型號")
+    mfd = Column(DateTime, comment="製造日期")
+    warranty = Column(DateTime, comment="保固日期")
+    period = Column(DateTime, comment="下個保養日期")
+    vendor = Column(String(255), comment="維護廠商")
+    warn_date = Column(DateTime, comment="汰換警告日期")
+    interval = Column(Integer, comment="通知區間")
+    status = Column(Integer, default=2, comment="設備狀態，1:連線, 2:離線")
+    last_online_time = Column(DateTime, comment="最後上線時間")
+    created_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_id = Column(Integer)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class RelInspectProperty(Base):
+    """設備資產關聯表（車輛與設備的關聯）"""
+    __tablename__ = "rel_inspect_property"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    inspect_property_car_id = Column(Integer, ForeignKey("inspect_property.id"), comment="車輛ID")
+    inspect_property_device_id = Column(Integer, ForeignKey("inspect_property.id"), comment="設備ID")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class RelInspectPropertyOrganization(Base):
+    """設備資產與組織關聯表"""
+    __tablename__ = "rel_inspect_property_organization"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    inspect_property_id = Column(Integer, ForeignKey("inspect_property.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organization.id"), nullable=False)
+    function = Column(String(10), comment="功能，EDIT:編輯, READ:查看")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class SysParams(Base):
+    """系統參數表"""
+    __tablename__ = "sys_params"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    param_type = Column(String(255), comment="參數類型")
+    ivalue = Column(Integer, comment="整數值")
+    pvalue = Column(String(255), comment="字串值")
+    pname = Column(String(255), comment="參數名稱")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

@@ -20,15 +20,15 @@ if __name__ == "__main__":
     print("=" * 60)
     print("RTSP Stream Monitoring API Server")
     print("=" * 60)
-    print("\nAPI Documentation: http://localhost:8232/api/docs")
-    print("Health Check: http://localhost:8232/api/health")
+    print("\nAPI Documentation: http://localhost:8282/api/docs")
+    print("Health Check: http://localhost:8282/api/health")
     print("\nPress Ctrl+C to stop the server\n")
     print("=" * 60)
 
     uvicorn.run(
         "api.main:app",
         host="0.0.0.0",
-        port=8232,
+        port=8282,
         reload=True,
         log_level="info"
     )

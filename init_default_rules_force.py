@@ -212,7 +212,7 @@ def main():
         print()
         print("="*60)
         print("提示：")
-        print("- 可透過 API (http://localhost:8232/api/docs) 管理這些規則")
+        print("- 可透過 API (http://localhost:8282/api/docs) 管理這些規則")
         print("- 規則按優先級從高到低匹配")
         print("- 可隨時啟用/停用規則")
         print("- 可修改信心度閾值、時段等參數")

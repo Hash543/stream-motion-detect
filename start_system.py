@@ -72,13 +72,20 @@ def main():
 
         print("\n系統已準備就緒!")
 
-        choice = input("\n是否要啟動監控系統? (y/N): ").strip().lower()
+        # 在 Docker 環境中自動啟動，否則詢問用戶
+        auto_start = os.getenv('AUTO_START', 'false').lower() == 'true'
 
-        if choice in ['y', 'yes']:
-            print("\n啟動監控系統...")
+        if auto_start:
+            print("\n自動啟動監控系統...")
             monitoring_system.run()
         else:
-            print("系統驗證完成，未啟動監控")
+            choice = input("\n是否要啟動監控系統? (y/N): ").strip().lower()
+
+            if choice in ['y', 'yes']:
+                print("\n啟動監控系統...")
+                monitoring_system.run()
+            else:
+                print("系統驗證完成，未啟動監控")
 
     except KeyboardInterrupt:
         print("\n用戶中斷")

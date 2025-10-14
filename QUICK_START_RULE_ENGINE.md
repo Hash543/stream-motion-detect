@@ -25,11 +25,11 @@ python init_default_rules_force.py
 python start_api.py
 ```
 
-API 文檔: http://localhost:8232/api/docs
+API 文檔: http://localhost:8282/api/docs
 
 ### 步驟 3: 查看和管理規則
 
-瀏覽器開啟: http://localhost:8232/api/docs
+瀏覽器開啟: http://localhost:8282/api/docs
 
 找到 `/api/rules` 端點，可以：
 - 查詢所有規則
@@ -55,13 +55,13 @@ python init_default_rules.py --list
 ### 透過 API 查詢規則
 
 ```bash
-curl http://localhost:8232/api/rules
+curl http://localhost:8282/api/rules
 ```
 
 ### 創建自訂規則
 
 ```bash
-curl -X POST http://localhost:8232/api/rules \
+curl -X POST http://localhost:8282/api/rules \
   -H "Content-Type: application/json" \
   -d '{
     "rule_id": "my_custom_rule",
@@ -77,13 +77,13 @@ curl -X POST http://localhost:8232/api/rules \
 ### 停用規則
 
 ```bash
-curl -X PATCH http://localhost:8232/api/rules/{rule_id}/disable
+curl -X PATCH http://localhost:8282/api/rules/{rule_id}/disable
 ```
 
 ### 啟用規則
 
 ```bash
-curl -X PATCH http://localhost:8232/api/rules/{rule_id}/enable
+curl -X PATCH http://localhost:8282/api/rules/{rule_id}/enable
 ```
 
 ## 📊 檢測類型

@@ -10,7 +10,7 @@ from typing import List, Optional
 import logging
 from datetime import datetime
 
-from api.routers import persons, streams, rules, violations
+from api.routers import persons, streams, rules, violations, auth, alert_event, role, positions, organization, equipment_assets, dashboard, dropdown, gps808
 from api.database import engine, Base
 
 # 設定日誌
@@ -46,6 +46,17 @@ app.include_router(persons.router, prefix="/api/persons", tags=["人臉識別管
 app.include_router(streams.router, prefix="/api/streams", tags=["影像來源管理"])
 app.include_router(rules.router, prefix="/api/rules", tags=["規則引擎"])
 app.include_router(violations.router, prefix="/api/violations", tags=["違規記錄"])
+
+# Face Motion 整合路由
+app.include_router(auth.router, tags=["認證管理"])
+app.include_router(alert_event.router, tags=["警報事件管理"])
+app.include_router(role.router, prefix="/api/role", tags=["角色管理"])
+app.include_router(positions.router, prefix="/api/positions", tags=["職位管理"])
+app.include_router(organization.router, prefix="/api/organization", tags=["組織管理"])
+app.include_router(equipment_assets.router, prefix="/api/equipmentAssets", tags=["設備資產管理"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["儀表板"])
+app.include_router(dropdown.router, prefix="/api/dropdown", tags=["下拉選單"])
+app.include_router(gps808.router, prefix="/api/gps808", tags=["GPS808 位置追蹤"])
 
 
 @app.get("/")
@@ -103,7 +114,9 @@ def get_system_info():
             "persons": "/api/persons",
             "streams": "/api/streams",
             "rules": "/api/rules",
-            "violations": "/api/violations"
+            "violations": "/api/violations",
+            "auth": "/api/auth",
+            "alertEvent": "/api/alertEvent"
         }
     }
 

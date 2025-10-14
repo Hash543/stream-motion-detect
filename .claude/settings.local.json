@@ -14,7 +14,8 @@
       "Bash(timeout 10 bash -c \"echo > /dev/tcp/210.61.69.175/22\")",
       "Bash(tee:*)",
       "Bash(curl -s http://210.61.69.175/api/health)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Read(//d/face-motion/server/**)"
     ],
     "deny": [],
     "ask": []

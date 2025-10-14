@@ -164,7 +164,7 @@ python init_default_rules.py --list
 
 ### 透過 API 管理規則
 
-API 端點: `http://localhost:8232/api/docs`
+API 端點: `http://localhost:8282/api/docs`
 
 #### 查詢所有規則
 ```bash
@@ -369,10 +369,10 @@ DEBUG - Violation helmet on camera_002 filtered by Rule Engine (no matching rule
 
 ```bash
 # 透過 API 查詢規則
-curl http://localhost:8232/api/rules
+curl http://localhost:8282/api/rules
 
 # 查詢特定規則
-curl http://localhost:8232/api/rules/default_helmet_detection
+curl http://localhost:8282/api/rules/default_helmet_detection
 ```
 
 ## 💡 最佳實踐
@@ -450,7 +450,7 @@ python init_default_rules.py --list
 # 尋找 "filtered by Rule Engine" 訊息
 
 # 檢查規則是否啟用
-curl http://localhost:8232/api/rules
+curl http://localhost:8282/api/rules
 ```
 
 ### 問題 2: 規則修改未生效
@@ -497,4 +497,4 @@ Rule Engine 提供了靈活且強大的檢測控制機制：
 
 **版本**: 1.0.0
 **最後更新**: 2025-10-02
-**API 端點**: http://localhost:8232/api/docs
+**API 端點**: http://localhost:8282/api/docs
