@@ -121,7 +121,7 @@ async def get_overview(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/-/trend/{type}", response_model=list)
+@router.get("/-/trend/{type}", response_model=dict)
 async def get_trend_data(
     type: str,
     startTime: str = Query(..., description="開始時間"),
@@ -185,7 +185,11 @@ async def get_trend_data(
             # 增加時間間隔
             current_date = current_date + timedelta(minutes=interval_minutes)
 
-        return result
+        # 返回統一格式
+        return {
+            "status": "success",
+            "data": result
+        }
     except HTTPException:
         raise
     except Exception as e:

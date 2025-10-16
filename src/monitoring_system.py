@@ -14,6 +14,7 @@ from .managers.universal_stream_manager import UniversalStreamManager
 from .managers.screenshot_manager import ScreenshotManager
 from .managers.notification_sender import NotificationSender
 from .managers.rule_engine_manager import RuleEngineManager
+from .managers.alert_event_manager import AlertEventManager
 
 from .detectors.helmet_detector import HelmetDetector
 from .detectors.drowsiness_detector import DrowsinessDetector
@@ -35,6 +36,7 @@ class MonitoringSystem:
         self.screenshot_manager = None
         self.notification_sender = None
         self.rule_engine_manager = None
+        self.alert_event_manager = None
 
         # AI Detectors
         self.helmet_detector = None
@@ -138,6 +140,9 @@ class MonitoringSystem:
         self.rule_engine_manager = RuleEngineManager()
         self.rule_engine_manager.reload_rules()
 
+        # Alert Event manager
+        self.alert_event_manager = AlertEventManager()
+
         logger.info("All managers initialized")
 
     def _initialize_detectors(self) -> None:
@@ -185,11 +190,11 @@ class MonitoringSystem:
             )
 
             # Inactivity Detection Manager
-            # 檢測30秒內沒有人臉且沒有動作的情況
+            # 檢測10分鐘內沒有人臉且沒有動作的情況
             self.inactivity_detection_manager = InactivityDetectionManager(
-                inactivity_threshold=30,  # 30 seconds of inactivity
-                motion_threshold=5.0,     # Motion detection threshold
-                check_interval=30         # Check interval
+                inactivity_threshold=600,  # 600 seconds (10 minutes) of inactivity
+                motion_threshold=5.0,      # Motion detection threshold
+                check_interval=600         # Check interval (10 minutes)
             )
 
             logger.info("All AI detectors and managers initialized")
@@ -429,8 +434,19 @@ class MonitoringSystem:
             if image_path:
                 self.stats["screenshots_taken"] += 1
 
-            # Note: Violation recording removed - use API instead
-            # TODO: Call API to save violation record
+            # 插入到 alert_event 表
+            if self.alert_event_manager and image_path:
+                alert_success = self.alert_event_manager.create_alert_event(
+                    camera_id=camera_id,
+                    violation_type=violation.detection_type,
+                    confidence=violation.confidence,
+                    image_path=image_path,
+                    bbox=violation.bbox,
+                    person_id=person_id
+                )
+
+                if alert_success:
+                    logger.info(f"Alert event created for {violation.detection_type} on {camera_id}")
 
             # Send notification if enabled in rule
             if matched_rule.get('notification_enabled', True):

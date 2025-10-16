@@ -20,7 +20,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/", response_model=List[ViolationResponse])
+@router.get("/")
 def list_violations(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -64,7 +64,14 @@ def list_violations(
         query = query.filter(Violation.timestamp <= end_time)
 
     violations = query.order_by(Violation.timestamp.desc()).offset(skip).limit(limit).all()
-    return violations
+
+    return {
+        "status": "success",
+        "data": {
+            "msg": "success",
+            "list": violations
+        }
+    }
 
 
 @router.get("/{violation_id}", response_model=ViolationResponse)

@@ -1,6 +1,6 @@
 """
 Inactivity Detection Manager
-無活動檢測管理器 - 檢測30秒內沒有人臉且沒有動作的情況
+無活動檢測管理器 - 檢測10分鐘內沒有人臉且沒有動作的情況
 """
 
 import cv2
@@ -30,16 +30,16 @@ class InactivityDetectionManager:
     無活動檢測管理器
 
     檢測邏輯：
-    1. 30秒沒有偵測到人臉 AND
-    2. 30秒沒有任何動作
+    1. 10分鐘 (600秒) 沒有偵測到人臉 AND
+    2. 10分鐘 (600秒) 沒有任何動作
 
     當兩個條件同時滿足時，返回 DetectionResult
     """
 
     def __init__(self,
-                 inactivity_threshold: int = 30,    # 無活動閾值（秒）
+                 inactivity_threshold: int = 600,   # 無活動閾值（秒），預設 10 分鐘
                  motion_threshold: float = 5.0,     # 動作閾值（%）
-                 check_interval: int = 30):         # 檢查間隔（秒）
+                 check_interval: int = 600):        # 檢查間隔（秒），預設 10 分鐘
 
         self.inactivity_threshold = inactivity_threshold
         self.motion_threshold = motion_threshold

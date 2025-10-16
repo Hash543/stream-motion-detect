@@ -25,17 +25,20 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
 class AlertEventCreate(BaseModel):
     camera_id: Optional[str] = None
-    code: Optional[str] = None
-    type: Optional[str] = None
-    length: Optional[str] = None
-    area: Optional[str] = None
-    time: Optional[datetime] = None
-    severity: Optional[str] = None
+    code: Optional[int] = None
+    type: Optional[int] = None  # 7: type code
+    length: Optional[int] = None
+    area: Optional[int] = None
+    time: Optional[str] = None  # Format: "2025-08-31 13:50:43"
+    severity: Optional[str] = None  # 中等, 高等, 低等
     image: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
-    address: Optional[str] = None
+    address: Optional[str] = ""  # If empty, auto-fetch from lat/lng
     order_no: Optional[str] = None
+    uIds: Optional[List[int]] = None  # User IDs for assignment
+    oIds: Optional[List[int]] = None  # Organization IDs
+    report_status: Optional[int] = None  # 1:未處理, 2:處理中, 3:已處理
 
 
 class AlertEventResponse(BaseModel):
@@ -60,9 +63,40 @@ async def add_alert_event(
 ):
     """
     新增警報事件
+    支持自動分配使用者和組織
     """
-    new_event = AlertEvent(**event.dict())
+    event_data = event.dict(exclude={"uIds", "oIds"})
+
+    # 如果 time 是字串，轉換為 datetime
+    if isinstance(event_data.get('time'), str):
+        try:
+            event_data['time'] = datetime.strptime(event_data['time'], "%Y-%m-%d %H:%M:%S")
+        except:
+            event_data['time'] = None
+
+    # TODO: 如果 address 為空且有經緯度，自動解析地址
+    # if not event_data.get('address') and event_data.get('lat') and event_data.get('lng'):
+    #     event_data['address'] = reverse_geocode(event_data['lat'], event_data['lng'])
+
+    # 建立 alert_event
+    new_event = AlertEvent(**event_data)
     db.add(new_event)
+    db.flush()  # Get ID without committing
+
+    # 如果提供了 uIds, oIds, report_status，自動進行分配
+    if event.uIds and event.oIds is not None and event.report_status:
+        # 更新 report_status
+        new_event.report_status = event.report_status
+
+        # 分配給使用者
+        for user_id in event.uIds:
+            assignment = AlertEventAssignUser(
+                ae_id=new_event.id,
+                user_id=user_id,
+                status=event.report_status
+            )
+            db.add(assignment)
+
     db.commit()
     db.refresh(new_event)
 
@@ -115,10 +149,14 @@ async def search_alert_events(
     events = query.order_by(AlertEvent.created_at.desc()).offset(offset).limit(pageSize).all()
 
     return {
-        "total": total,
-        "page": page,
-        "pageSize": pageSize,
-        "data": events
+        "status": "success",
+        "data": {
+            "msg": "success",
+            "list": events,
+            "total": total,
+            "page": page,
+            "pageSize": pageSize
+        }
     }
 
 
