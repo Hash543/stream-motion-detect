@@ -2,6 +2,7 @@ import cv2
 import threading
 import time
 import logging
+import os
 from typing import Dict, Optional, Callable, Any
 from queue import Queue, Empty
 import numpy as np
@@ -11,12 +12,14 @@ logger = logging.getLogger(__name__)
 
 class RTSPStream:
     def __init__(self, camera_id: str, rtsp_url: str, location: str,
-                 max_reconnect_attempts: int = 5, reconnect_delay: int = 5):
+                 max_reconnect_attempts: int = 5, reconnect_delay: int = 5,
+                 connection_timeout: int = 3):
         self.camera_id = camera_id
         self.rtsp_url = rtsp_url
         self.location = location
         self.max_reconnect_attempts = max_reconnect_attempts
         self.reconnect_delay = reconnect_delay
+        self.connection_timeout = connection_timeout
 
         self.cap: Optional[cv2.VideoCapture] = None
         self.is_running = False
@@ -31,7 +34,15 @@ class RTSPStream:
             if self.cap is not None:
                 self.cap.release()
 
-            self.cap = cv2.VideoCapture(self.rtsp_url)
+            logger.info(f"Connecting to RTSP stream: {self.camera_id} (timeout: {self.connection_timeout}s)")
+
+            # 設定 OpenCV RTSP 逾時參數（毫秒）
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = f'rtsp_transport;tcp|timeout;{self.connection_timeout * 1000000}'
+
+            self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+
+            # 設定連線逾時（OpenCV 4.5.2+）
+            self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.connection_timeout * 1000)
 
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             self.cap.set(cv2.CAP_PROP_FPS, 30)
@@ -39,7 +50,13 @@ class RTSPStream:
             if not self.cap.isOpened():
                 raise ConnectionError(f"Failed to open RTSP stream: {self.rtsp_url}")
 
+            # 嘗試讀取第一幀，使用逾時機制
+            start_time = time.time()
             ret, frame = self.cap.read()
+
+            if time.time() - start_time > self.connection_timeout:
+                raise TimeoutError(f"Timeout reading frame from: {self.rtsp_url}")
+
             if not ret or frame is None:
                 raise ConnectionError(f"Failed to read initial frame from: {self.rtsp_url}")
 
@@ -50,7 +67,7 @@ class RTSPStream:
 
         except Exception as e:
             self.last_error = str(e)
-            logger.error(f"Failed to connect to RTSP stream {self.camera_id}: {e}")
+            logger.warning(f"Failed to connect to RTSP stream {self.camera_id}: {e}")
             if self.cap is not None:
                 self.cap.release()
                 self.cap = None
@@ -122,12 +139,12 @@ class RTSPStream:
 
     def _reconnect(self) -> bool:
         if self.reconnect_count >= self.max_reconnect_attempts:
-            logger.error(f"Max reconnection attempts reached for {self.camera_id}")
+            logger.warning(f"Max reconnection attempts ({self.max_reconnect_attempts}) reached for {self.camera_id}, stopping")
             self.is_running = False
             return False
 
         self.reconnect_count += 1
-        logger.info(f"Attempting to reconnect {self.camera_id} (attempt {self.reconnect_count})")
+        logger.info(f"Attempting to reconnect {self.camera_id} (attempt {self.reconnect_count}/{self.max_reconnect_attempts})")
 
         time.sleep(self.reconnect_delay)
 
@@ -135,6 +152,7 @@ class RTSPStream:
             logger.info(f"Successfully reconnected {self.camera_id}")
             return True
 
+        logger.warning(f"Reconnection attempt {self.reconnect_count} failed for {self.camera_id}")
         return False
 
     def get_latest_frame(self) -> Optional[tuple]:
@@ -162,16 +180,28 @@ class RTSPManager:
         self.processing_fps = 2
         self.last_processing_time: Dict[str, float] = {}
 
+        # 從環境變數讀取 RTSP 設定
+        self.default_timeout = int(os.getenv('RTSP_TIMEOUT', '3'))
+        self.default_reconnect_attempts = int(os.getenv('RTSP_RECONNECT_ATTEMPTS', '2'))
+        logger.info(f"RTSPManager initialized with timeout={self.default_timeout}s, reconnect_attempts={self.default_reconnect_attempts}")
+
     def add_stream(self, camera_id: str, rtsp_url: str, location: str) -> bool:
         if camera_id in self.streams:
             logger.warning(f"Stream {camera_id} already exists")
             return False
 
-        stream = RTSPStream(camera_id, rtsp_url, location)
+        stream = RTSPStream(
+            camera_id,
+            rtsp_url,
+            location,
+            max_reconnect_attempts=self.default_reconnect_attempts,
+            reconnect_delay=2,  # 縮短重連延遲
+            connection_timeout=self.default_timeout
+        )
         self.streams[camera_id] = stream
         self.last_processing_time[camera_id] = 0
 
-        logger.info(f"Added RTSP stream: {camera_id}")
+        logger.info(f"Added RTSP stream: {camera_id} (timeout={self.default_timeout}s)")
         return True
 
     def remove_stream(self, camera_id: str) -> bool:

@@ -255,18 +255,18 @@ async def get_trend_data(
     if not end_date:
         end_date = datetime.now().isoformat()
 
-    # 根據時間間隔設定格式
+    # 根據時間間隔設定格式 (PostgreSQL)
     format_map = {
-        "hour": "%Y-%m-%d %H:00:00",
-        "day": "%Y-%m-%d",
-        "week": "%Y-W%U",
-        "month": "%Y-%m"
+        "hour": "YYYY-MM-DD HH24:00:00",
+        "day": "YYYY-MM-DD",
+        "week": "IYYY-IW",  # ISO week
+        "month": "YYYY-MM"
     }
-    time_format = format_map[interval]
+    pg_format = format_map[interval]
 
-    # 查詢數據
+    # 查詢數據 (使用 PostgreSQL 的 to_char)
     results = db.query(
-        func.date_format(AlertEvent.created_at, time_format).label("time_group"),
+        func.to_char(AlertEvent.created_at, pg_format).label("time_group"),
         func.count(AlertEvent.id).label("count")
     ).filter(
         AlertEvent.created_at.between(start_date, end_date)
@@ -329,5 +329,8 @@ async def get_assigned_alert_events(
 
     return {
         "status": "success",
-        "data": events
+        "data": {
+            "msg": "success",
+            "list": events
+        }
     }

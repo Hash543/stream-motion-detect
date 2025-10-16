@@ -13,6 +13,10 @@ import argparse
 import sys
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# 載入 .env 環境變數
+load_dotenv()
 
 # Add src directory to Python path
 src_path = Path(__file__).parent / "src"

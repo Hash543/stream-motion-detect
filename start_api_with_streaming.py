@@ -3,6 +3,11 @@
 提供 MJPEG 串流功能
 """
 
+from dotenv import load_dotenv
+
+# 載入 .env 環境變數
+load_dotenv()
+
 import uvicorn
 import logging
 import sys

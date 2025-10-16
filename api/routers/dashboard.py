@@ -146,13 +146,13 @@ async def get_trend_data(
         except:
             raise HTTPException(status_code=400, detail="時間格式錯誤")
 
-        # 根據時間區間類型格式化 SQL 查詢
+        # 根據時間區間類型格式化 SQL 查詢 (PostgreSQL)
         if rangeType == "hour":
-            time_format = func.date_format(AlertEvent.created_at, '%Y/%m/%d %H:00:00')
+            time_format = func.to_char(AlertEvent.created_at, 'YYYY/MM/DD HH24:00:00')
         elif rangeType == "day":
-            time_format = func.date_format(AlertEvent.created_at, '%Y/%m/%d 00:00:00')
+            time_format = func.to_char(AlertEvent.created_at, 'YYYY/MM/DD 00:00:00')
         else:  # month
-            time_format = func.date_format(AlertEvent.created_at, '%Y/%m/01 00:00:00')
+            time_format = func.to_char(AlertEvent.created_at, 'YYYY/MM/01 00:00:00')
 
         # 查詢資料庫
         rows = db.query(

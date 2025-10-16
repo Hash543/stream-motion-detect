@@ -8,6 +8,10 @@
 import sys
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# 載入 .env 環境變數
+load_dotenv()
 
 # 設定編碼
 if sys.platform == "win32":

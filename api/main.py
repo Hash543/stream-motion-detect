@@ -3,6 +3,11 @@ FastAPI Main Application
 RTSP Stream Monitoring System API
 """
 
+from dotenv import load_dotenv
+
+# 載入 .env 環境變數
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,7 +15,7 @@ from typing import List, Optional
 import logging
 from datetime import datetime
 
-from api.routers import persons, streams, rules, violations, auth, alert_event, role, positions, organization, equipment_assets, dashboard, dropdown, gps808
+from api.routers import persons, streams, rules, violations, auth, alert_event, role, positions, organization, equipment_assets, dashboard, dropdown, gps808, users
 from api.database import engine, Base
 
 # 設定日誌
@@ -49,6 +54,7 @@ app.include_router(violations.router, prefix="/api/violations", tags=["違規記
 
 # Face Motion 整合路由
 app.include_router(auth.router, tags=["認證管理"])
+app.include_router(users.router, tags=["使用者管理"])
 app.include_router(alert_event.router, tags=["警報事件管理"])
 app.include_router(role.router, prefix="/api/role", tags=["角色管理"])
 app.include_router(positions.router, prefix="/api/positions", tags=["職位管理"])

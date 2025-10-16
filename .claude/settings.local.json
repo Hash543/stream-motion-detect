@@ -15,7 +15,13 @@
       "Bash(tee:*)",
       "Bash(curl -s http://210.61.69.175/api/health)",
       "Bash(curl:*)",
-      "Read(//d/face-motion/server/**)"
+      "Read(//d/face-motion/server/**)",
+      "Bash(echo \"POSTGRES_HOST=$POSTGRES_HOST\")",
+      "Bash(echo \"POSTGRES_DATABASE=$POSTGRES_DATABASE\")",
+      "Bash(echo \"POSTGRES_USER=$POSTGRES_USER\")",
+      "Bash(echo \"POSTGRES_PASSWORD=$POSTGRES_PASSWORD\")",
+      "Bash(test:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": [],
     "ask": []
