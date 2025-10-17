@@ -435,8 +435,9 @@ class MonitoringSystem:
                 self.stats["screenshots_taken"] += 1
 
             # 插入到 alert_event 表
+            alert_event_id = None
             if self.alert_event_manager and image_path:
-                alert_success = self.alert_event_manager.create_alert_event(
+                alert_event_id = self.alert_event_manager.create_alert_event(
                     camera_id=camera_id,
                     violation_type=violation.detection_type,
                     confidence=violation.confidence,
@@ -445,7 +446,7 @@ class MonitoringSystem:
                     person_id=person_id
                 )
 
-                if alert_success:
+                if alert_event_id:
                     logger.info(f"Alert event created for {violation.detection_type} on {camera_id}")
 
             # Send notification if enabled in rule
@@ -462,6 +463,18 @@ class MonitoringSystem:
                 if success:
                     self.stats["notifications_sent"] += 1
 
+            # Broadcast WebSocket notification
+            self._broadcast_websocket_violation(
+                alert_event_id=alert_event_id,
+                camera_id=camera_id,
+                violation_type=violation.detection_type,
+                person_id=person_id,
+                confidence=violation.confidence,
+                image_path=image_path,
+                bbox=violation.bbox,
+                timestamp=timestamp
+            )
+
             self.stats["violations_detected"] += 1
 
             logger.warning(
@@ -472,6 +485,61 @@ class MonitoringSystem:
 
         except Exception as e:
             logger.error(f"Error handling violation: {e}")
+
+    def _broadcast_websocket_violation(self, alert_event_id, camera_id: str, violation_type: str,
+                                      person_id: Optional[str], confidence: float,
+                                      image_path: Optional[str], bbox, timestamp: datetime) -> None:
+        """Broadcast violation to WebSocket clients"""
+        try:
+            import asyncio
+            from api.routers.websocket import broadcast_violation
+
+            # Prepare violation data
+            violation_data = {
+                "id": alert_event_id,
+                "violation_type": violation_type,
+                "camera_id": camera_id,
+                "stream_id": camera_id,
+                "confidence": confidence,
+                "person_id": person_id,
+                "severity": self._get_severity_from_violation(violation_type, confidence),
+                "lat": None,  # TODO: Get from stream config
+                "lng": None,  # TODO: Get from stream config
+                "address": "",  # TODO: Get from stream config
+                "image_path": image_path,
+                "bbox": bbox,
+                "created_at": timestamp.isoformat()
+            }
+
+            # Run async broadcast in a thread-safe manner
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop in this thread, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            # Schedule the coroutine
+            if loop.is_running():
+                # Loop is already running, schedule task
+                asyncio.create_task(broadcast_violation(violation_data))
+            else:
+                # Loop is not running, run until complete
+                loop.run_until_complete(broadcast_violation(violation_data))
+
+            logger.info(f"WebSocket broadcast sent for {violation_type} on {camera_id}")
+
+        except Exception as e:
+            logger.error(f"Error broadcasting WebSocket violation: {e}")
+
+    def _get_severity_from_violation(self, violation_type: str, confidence: float) -> str:
+        """Get severity level from violation type and confidence"""
+        if confidence >= 0.9:
+            return "高等"
+        elif confidence >= 0.7:
+            return "中等"
+        else:
+            return "低等"
 
     def _get_stream_type(self, camera_id: str) -> str:
         """Get stream type for a camera"""

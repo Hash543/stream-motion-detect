@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Violation Notification Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status.connected .status-dot {
+            background: #28a745;
+        }
+
+        .status.disconnected .status-dot {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button.primary {
+            background: #667eea;
+            color: white;
+        }
+
+        button.primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button.danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        button.danger:hover {
+            background: #c82333;
+        }
+
+        button.secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        button.secondary:hover {
+            background: #545b62;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .log-entry.info {
+            color: #61dafb;
+            background: rgba(97, 218, 251, 0.1);
+        }
+
+        .log-entry.success {
+            color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .log-entry.warning {
+            color: #ff9800;
+            background: rgba(255, 152, 0, 0.1);
+        }
+
+        .log-entry.error {
+            color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .log-time {
+            color: #888;
+            min-width: 80px;
+        }
+
+        .violations-list {
+            margin-top: 20px;
+        }
+
+        .violation-item {
+            background: #f8f9fa;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .violation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .violation-type {
+            font-weight: 700;
+            font-size: 16px;
+            color: #dc3545;
+        }
+
+        .violation-severity {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .violation-severity.high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .violation-severity.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .violation-severity.low {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .violation-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .detail-item {
+            display: flex;
+            gap: 5px;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .detail-value {
+            color: #333;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 WebSocket 違規通知測試</h1>
+
+        <div class="card">
+            <div id="status" class="status disconnected">
+                <div class="status-dot"></div>
+                <span id="statusText">未連接</span>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalViolations">0</div>
+                    <div class="stat-label">總違規數</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="reconnectAttempts">0</div>
+                    <div class="stat-label">重連次數</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="messageCount">0</div>
+                    <div class="stat-label">訊息總數</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="primary" onclick="connect()">連接 WebSocket</button>
+                <button class="danger" onclick="disconnect()">斷開連接</button>
+                <button class="secondary" onclick="sendPing()">發送 Ping</button>
+                <button class="secondary" onclick="clearLogs()">清除日誌</button>
+                <button class="secondary" onclick="clearViolations()">清除違規</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📋 連線日誌</h3>
+            <div class="log-container" id="logContainer"></div>
+        </div>
+
+        <div class="card">
+            <h3>⚠️ 即時違規通知</h3>
+            <div class="violations-list" id="violationsList">
+                <p style="color: #999; text-align: center;">等待違規通知...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let violations = [];
+        let reconnectAttempts = 0;
+        let messageCount = 0;
+        const wsUrl = 'ws://localhost:8282/api/ws/violations';
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('warning', '已經連接，無需重複連接');
+                return;
+            }
+
+            log('info', `正在連接到 ${wsUrl}...`);
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                log('success', 'WebSocket 連接成功！');
+                updateStatus(true);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    messageCount++;
+                    updateMessageCount();
+
+                    log('info', `收到訊息: ${message.type}`);
+
+                    if (message.type === 'violation' && message.data) {
+                        handleViolation(message.data);
+                    } else if (message.type === 'connection') {
+                        log('success', message.message);
+                    } else if (message.type === 'pong') {
+                        log('info', 'Pong 回應收到');
+                    }
+                } catch (error) {
+                    log('error', `解析訊息失敗: ${error.message}`);
+                }
+            };
+
+            ws.onerror = (error) => {
+                log('error', 'WebSocket 錯誤');
+                console.error(error);
+            };
+
+            ws.onclose = () => {
+                log('warning', 'WebSocket 連接已關閉');
+                updateStatus(false);
+
+                // 自動重連
+                if (reconnectAttempts < 5) {
+                    reconnectAttempts++;
+                    updateReconnectAttempts();
+                    log('info', `3秒後嘗試重新連接 (${reconnectAttempts}/5)...`);
+                    setTimeout(connect, 3000);
+                }
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                log('info', '手動斷開連接');
+                reconnectAttempts = 0;
+                updateReconnectAttempts();
+            }
+        }
+
+        function sendPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+                log('info', 'Ping 已發送');
+            } else {
+                log('error', '未連接，無法發送 Ping');
+            }
+        }
+
+        function handleViolation(violation) {
+            log('warning', `違規檢測: ${violation.violation_type} (${violation.camera_id})`);
+
+            violations.unshift(violation);
+            updateViolationCount();
+            renderViolations();
+
+            // 播放通知音效（需要用戶互動後才能播放）
+            playNotificationSound();
+        }
+
+        function updateStatus(connected) {
+            const statusEl = document.getElementById('status');
+            const statusTextEl = document.getElementById('statusText');
+
+            if (connected) {
+                statusEl.className = 'status connected';
+                statusTextEl.textContent = 'WebSocket 已連接';
+            } else {
+                statusEl.className = 'status disconnected';
+                statusTextEl.textContent = '未連接';
+            }
+        }
+
+        function updateViolationCount() {
+            document.getElementById('totalViolations').textContent = violations.length;
+        }
+
+        function updateReconnectAttempts() {
+            document.getElementById('reconnectAttempts').textContent = reconnectAttempts;
+        }
+
+        function updateMessageCount() {
+            document.getElementById('messageCount').textContent = messageCount;
+        }
+
+        function log(type, message) {
+            const logContainer = document.getElementById('logContainer');
+            const time = new Date().toLocaleTimeString('zh-TW');
+
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span>${message}</span>
+            `;
+
+            logContainer.insertBefore(entry, logContainer.firstChild);
+
+            // 限制日誌數量
+            if (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+
+        function renderViolations() {
+            const container = document.getElementById('violationsList');
+
+            if (violations.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center;">等待違規通知...</p>';
+                return;
+            }
+
+            container.innerHTML = violations.map(v => `
+                <div class="violation-item">
+                    <div class="violation-header">
+                        <div class="violation-type">${getViolationTypeText(v.violation_type)}</div>
+                        <div class="violation-severity ${getSeverityClass(v.severity)}">${v.severity}</div>
+                    </div>
+                    <div class="violation-details">
+                        <div class="detail-item">
+                            <span class="detail-label">攝像頭:</span>
+                            <span class="detail-value">${v.camera_id}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">信心度:</span>
+                            <span class="detail-value">${(v.confidence * 100).toFixed(1)}%</span>
+                        </div>
+                        ${v.person_id ? `
+                        <div class="detail-item">
+                            <span class="detail-label">人員ID:</span>
+                            <span class="detail-value">${v.person_id}</span>
+                        </div>
+                        ` : ''}
+                        <div class="detail-item">
+                            <span class="detail-label">時間:</span>
+                            <span class="detail-value">${new Date(v.created_at).toLocaleString('zh-TW')}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getViolationTypeText(type) {
+            const typeMap = {
+                helmet: '未戴安全帽',
+                drowsiness: '瞌睡檢測',
+                inactivity: '靜止偵測',
+                face: '人臉識別',
+                unknown: '未知類型'
+            };
+            return typeMap[type] || '違規通知';
+        }
+
+        function getSeverityClass(severity) {
+            if (severity === '高等') return 'high';
+            if (severity === '中等') return 'medium';
+            return 'low';
+        }
+
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = '';
+            log('info', '日誌已清除');
+        }
+
+        function clearViolations() {
+            violations = [];
+            updateViolationCount();
+            renderViolations();
+            log('info', '違規列表已清除');
+        }
+
+        function playNotificationSound() {
+            // 簡單的通知音效（使用 Web Audio API）
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (error) {
+                console.log('Audio play failed:', error);
+            }
+        }
+
+        // 頁面載入時自動連接
+        window.onload = () => {
+            log('info', '頁面已載入，準備連接 WebSocket');
+            connect();
+        };
+
+        // 頁面關閉時斷開連接
+        window.onbeforeunload = () => {
+            if (ws) {
+                ws.close();
+            }
+        };
+    </script>
+</body>
+</html>

@@ -44,7 +44,7 @@ class AlertEventManager:
         uIds: Optional[List[int]] = None,
         oIds: Optional[List[int]] = None,
         report_status: Optional[int] = None
-    ) -> bool:
+    ) -> Optional[int]:
         """
         建立並發送 Alert Event
 
@@ -64,7 +64,7 @@ class AlertEventManager:
             report_status: 報告狀態 (1:未處理, 2:處理中, 3:已處理)
 
         Returns:
-            bool: 是否成功建立
+            Optional[int]: Alert Event ID if successful, None otherwise
         """
         try:
             # 映射違規類型到代碼
@@ -124,23 +124,24 @@ class AlertEventManager:
 
             if response.status_code == 200:
                 result = response.json()
+                alert_id = result.get('data', {}).get('id')
                 logger.info(
                     f"Alert event created successfully: "
-                    f"ID={result.get('data', {}).get('id')}, "
+                    f"ID={alert_id}, "
                     f"type={violation_type}, camera={camera_id}"
                 )
-                return True
+                return alert_id
             else:
                 logger.error(
                     f"Failed to create alert event: "
                     f"status={response.status_code}, "
                     f"response={response.text}"
                 )
-                return False
+                return None
 
         except Exception as e:
             logger.error(f"Error creating alert event: {e}")
-            return False
+            return None
 
     def create_helmet_violation_event(
         self,
@@ -150,7 +151,7 @@ class AlertEventManager:
         bbox: Optional[tuple] = None,
         person_id: Optional[str] = None,
         severity: str = "高等"
-    ) -> bool:
+    ) -> Optional[int]:
         """
         建立安全帽違規事件
 
@@ -180,7 +181,7 @@ class AlertEventManager:
         bbox: Optional[tuple] = None,
         person_id: Optional[str] = None,
         severity: str = "高等"
-    ) -> bool:
+    ) -> Optional[int]:
         """
         建立瞌睡違規事件
 
@@ -209,7 +210,7 @@ class AlertEventManager:
         image_path: str,
         bbox: Optional[tuple] = None,
         severity: str = "中等"
-    ) -> bool:
+    ) -> Optional[int]:
         """
         建立靜止偵測違規事件
 

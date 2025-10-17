@@ -15,7 +15,7 @@ from typing import List, Optional
 import logging
 from datetime import datetime
 
-from api.routers import persons, streams, rules, violations, auth, alert_event, role, positions, organization, equipment_assets, dashboard, dropdown, gps808, users
+from api.routers import persons, streams, rules, violations, auth, alert_event, role, positions, organization, equipment_assets, dashboard, dropdown, gps808, users, websocket
 from api.database import engine, Base
 
 # 設定日誌
@@ -63,6 +63,7 @@ app.include_router(equipment_assets.router, prefix="/api/equipmentAssets", tags=
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["儀表板"])
 app.include_router(dropdown.router, prefix="/api/dropdown", tags=["下拉選單"])
 app.include_router(gps808.router, prefix="/api/gps808", tags=["GPS808 位置追蹤"])
+app.include_router(websocket.router, tags=["WebSocket 即時通知"])
 
 
 @app.get("/")

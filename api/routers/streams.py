@@ -296,20 +296,29 @@ def set_monitoring_system(system):
 
 
 @router.get("/{stream_id}/video")
-async def get_video_stream(stream_id: str, db: Session = Depends(get_db)):
+async def get_video_stream(
+    stream_id: str,
+    detection: bool = False,
+    db: Session = Depends(get_db)
+):
     """
     取得影像來源的MJPEG串流
 
     - **stream_id**: 串流ID
+    - **detection**: 是否顯示偵測框 (預設: False)
 
     前端使用範例:
     ```html
-    <img src="http://localhost:8000/api/streams/camera1/video" />
+    <!-- 原始影像 -->
+    <img src="http://localhost:8282/api/streams/camera1/video" />
+
+    <!-- 帶偵測框的影像 -->
+    <img src="http://localhost:8282/api/streams/camera1/video?detection=true" />
     ```
     或使用JavaScript:
     ```javascript
     const img = document.getElementById('stream-img');
-    img.src = 'http://localhost:8000/api/streams/camera1/video';
+    img.src = 'http://localhost:8282/api/streams/camera1/video?detection=true';
     ```
     """
     # 檢查串流是否存在於資料庫
@@ -323,7 +332,7 @@ async def get_video_stream(stream_id: str, db: Session = Depends(get_db)):
     async def generate_frames():
         """生成MJPEG串流幀"""
         try:
-            logger.info(f"Starting MJPEG stream for: {stream_id}")
+            logger.info(f"Starting MJPEG stream for: {stream_id} (detection={detection})")
 
             while True:
                 # 從監控系統獲取最新幀
@@ -353,6 +362,9 @@ async def get_video_stream(stream_id: str, db: Session = Depends(get_db)):
                 # 如果沒有獲取到幀，創建提示圖像
                 if frame is None:
                     frame = _create_error_frame(f"No frame available for {stream_id}")
+                elif detection and _monitoring_system is not None:
+                    # 如果需要顯示偵測框，進行即時偵測並繪製
+                    frame = _draw_detections(frame, _monitoring_system)
 
                 # 將幀編碼為JPEG
                 try:
@@ -387,6 +399,104 @@ async def get_video_stream(stream_id: str, db: Session = Depends(get_db)):
             "Expires": "0",
         }
     )
+
+
+def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
+    """
+    在影像上繪製偵測框
+
+    Args:
+        frame: 原始影像幀
+        monitoring_system: 監控系統實例
+
+    Returns:
+        繪製了偵測框的影像
+    """
+    try:
+        # 複製影像以避免修改原始幀
+        frame_with_detections = frame.copy()
+
+        # 1. 人臉偵測
+        if hasattr(monitoring_system, 'face_recognizer') and monitoring_system.face_recognizer:
+            try:
+                face_detections = monitoring_system.face_recognizer.detect(frame)
+                for face in face_detections:
+                    x, y, w, h = face.bbox
+
+                    # 繪製人臉框（綠色）
+                    cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                    # 顯示人名和信心度
+                    label = f"{face.person_id or 'Unknown'}"
+                    if face.confidence:
+                        label += f" ({face.confidence:.2f})"
+
+                    # 繪製標籤背景
+                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                    cv2.rectangle(frame_with_detections, (x, y - 20), (x + label_size[0], y), (0, 255, 0), -1)
+
+                    # 繪製標籤文字
+                    cv2.putText(frame_with_detections, label, (x, y - 5),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            except Exception as e:
+                logger.debug(f"Error detecting faces: {e}")
+
+        # 2. 安全帽偵測
+        if hasattr(monitoring_system, 'helmet_detector') and monitoring_system.helmet_detector:
+            try:
+                helmet_detections = monitoring_system.helmet_detector.detect(frame)
+                for helmet in helmet_detections:
+                    x, y, w, h = helmet['bbox']
+                    has_helmet = helmet['has_helmet']
+                    confidence = helmet['confidence']
+
+                    # 有安全帽：藍色，無安全帽：紅色
+                    color = (255, 0, 0) if has_helmet else (0, 0, 255)
+                    label = f"{'Helmet' if has_helmet else 'No Helmet'} ({confidence:.2f})"
+
+                    # 繪製框
+                    cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), color, 2)
+
+                    # 繪製標籤背景
+                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                    cv2.rectangle(frame_with_detections, (x, y - 20), (x + label_size[0], y), color, -1)
+
+                    # 繪製標籤文字
+                    cv2.putText(frame_with_detections, label, (x, y - 5),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            except Exception as e:
+                logger.debug(f"Error detecting helmets: {e}")
+
+        # 3. 瞌睡偵測
+        if hasattr(monitoring_system, 'drowsiness_detector') and monitoring_system.drowsiness_detector:
+            try:
+                drowsiness_detections = monitoring_system.drowsiness_detector.detect(frame)
+                for drowsy in drowsiness_detections:
+                    x, y, w, h = drowsy.bbox
+
+                    # 瞌睡警告：橘色
+                    cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), (0, 165, 255), 2)
+
+                    # 顯示瞌睡警告
+                    label = f"Drowsy ({drowsy.confidence:.2f})"
+                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                    cv2.rectangle(frame_with_detections, (x, y - 20), (x + label_size[0], y), (0, 165, 255), -1)
+                    cv2.putText(frame_with_detections, label, (x, y - 5),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            except Exception as e:
+                logger.debug(f"Error detecting drowsiness: {e}")
+
+        # 在左上角顯示偵測狀態
+        status_text = "Detection: ON"
+        cv2.putText(frame_with_detections, status_text, (10, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        return frame_with_detections
+
+    except Exception as e:
+        logger.error(f"Error drawing detections: {e}")
+        # 如果繪製失敗，返回原始影像
+        return frame
 
 
 def _create_error_frame(message: str) -> np.ndarray:

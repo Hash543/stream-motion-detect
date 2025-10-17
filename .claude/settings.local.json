@@ -21,7 +21,8 @@
       "Bash(echo \"POSTGRES_USER=$POSTGRES_USER\")",
       "Bash(echo \"POSTGRES_PASSWORD=$POSTGRES_PASSWORD\")",
       "Bash(test:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Read(//d/face-motion/client/**)"
     ],
     "deny": [],
     "ask": []
