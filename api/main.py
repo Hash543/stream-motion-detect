@@ -16,7 +16,7 @@ import logging
 from datetime import datetime
 
 from api.routers import persons, streams, rules, violations, auth, alert_event, role, positions, organization, equipment_assets, dashboard, dropdown, gps808, users, websocket
-from api.database import engine, Base
+from api.database import engine, Base, dispose_engine
 
 # 設定日誌
 logging.basicConfig(
@@ -45,6 +45,23 @@ app.add_middleware(
 
 # 創建資料庫表
 Base.metadata.create_all(bind=engine)
+
+# 應用程式生命週期事件
+@app.on_event("startup")
+async def startup_event():
+    """應用程式啟動時執行"""
+    logger.info("Application starting up...")
+    logger.info(f"Database engine pool size: {engine.pool.size()}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """應用程式關閉時執行"""
+    logger.info("Application shutting down...")
+    # 關閉所有資料庫連線
+    dispose_engine()
+    logger.info("Database connections disposed")
+
 
 # 註冊路由
 app.include_router(persons.router, prefix="/api/persons", tags=["人臉識別管理"])
@@ -79,12 +96,14 @@ def read_root():
 @app.get("/api/health")
 def health_check():
     """健康檢查"""
+    from api.database import SessionLocal
+    from sqlalchemy import text
+
+    db = None
     try:
         # 檢查資料庫連接
-        from api.database import SessionLocal
         db = SessionLocal()
-        db.execute("SELECT 1")
-        db.close()
+        db.execute(text("SELECT 1"))
 
         return {
             "status": "healthy",
@@ -101,6 +120,10 @@ def health_check():
                 "error": str(e)
             }
         )
+    finally:
+        # 確保連線被關閉
+        if db:
+            db.close()
 
 
 @app.get("/api/info")

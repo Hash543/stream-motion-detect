@@ -23,13 +23,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/", response_model=List[PersonResponse])
+@router.get("/")
 def list_persons(
     skip: int = 0,
     limit: int = 100,
     status: Optional[str] = None,
     department: Optional[str] = None,
-    user_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -39,20 +38,17 @@ def list_persons(
     - **limit**: 限制筆數
     - **status**: 篩選狀態 (active/inactive)
     - **department**: 篩選部門
-    - **user_id**: 篩選關聯的使用者ID
     """
-    query = db.query(Person).outerjoin(User, Person.user_id == User.id)
+    query = db.query(Person)
 
     if status:
         query = query.filter(Person.status == status)
     if department:
         query = query.filter(Person.department == department)
-    if user_id:
-        query = query.filter(Person.user_id == user_id)
 
     persons = query.offset(skip).limit(limit).all()
 
-    # 添加 user_name 到回應
+    # 回應資料
     result = []
     for person in persons:
         person_dict = {
@@ -61,11 +57,11 @@ def list_persons(
             "name": person.name,
             "department": person.department,
             "position": person.position,
-            "user_id": person.user_id,
+            "user_id": None,  # 欄位不存在，設為 None
             "status": person.status,
             "extra_data": person.extra_data,
             "face_encoding": person.face_encoding,
-            "user_name": person.user.user_name if person.user else None,
+            "user_name": None,  # 沒有關聯
             "created_at": person.created_at,
             "updated_at": person.updated_at
         }
@@ -74,36 +70,34 @@ def list_persons(
     return result
 
 
-@router.get("/{person_id}", response_model=PersonResponse)
+@router.get("/{person_id}")
 def get_person(person_id: str, db: Session = Depends(get_db)):
     """
     取得特定人員資訊
 
     - **person_id**: 人員ID
     """
-    person = db.query(Person).outerjoin(User, Person.user_id == User.id)\
-        .filter(Person.person_id == person_id).first()
+    person = db.query(Person).filter(Person.person_id == person_id).first()
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
-    # 添加 user_name 到回應
     return {
         "id": person.id,
         "person_id": person.person_id,
         "name": person.name,
         "department": person.department,
         "position": person.position,
-        "user_id": person.user_id,
+        "user_id": None,
         "status": person.status,
         "extra_data": person.extra_data,
         "face_encoding": person.face_encoding,
-        "user_name": person.user.user_name if person.user else None,
+        "user_name": None,
         "created_at": person.created_at,
         "updated_at": person.updated_at
     }
 
 
-@router.post("/", response_model=PersonResponse)
+@router.post("/")
 def create_person(
     person: PersonCreate,
     db: Session = Depends(get_db)
@@ -115,7 +109,6 @@ def create_person(
     - **name**: 姓名
     - **department**: 部門 (可選)
     - **position**: 職位 (可選)
-    - **user_id**: 關聯的使用者ID (可選)
     - **status**: 狀態 (active/inactive)
     - **extra_data**: 其他元數據 (可選)
     """
@@ -124,19 +117,12 @@ def create_person(
     if existing:
         raise HTTPException(status_code=400, detail="Person ID already exists")
 
-    # 如果提供了 user_id，檢查使用者是否存在
-    if person.user_id:
-        user = db.query(User).filter(User.id == person.user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
     # 建立人員
     db_person = Person(
         person_id=person.person_id,
         name=person.name,
         department=person.department,
         position=person.position,
-        user_id=person.user_id,
         status=person.status,
         extra_data=person.extra_data
     )
@@ -145,13 +131,7 @@ def create_person(
     db.commit()
     db.refresh(db_person)
 
-    logger.info(f"Created person: {person.person_id} - {person.name} (user_id: {person.user_id})")
-
-    # 取得使用者名稱
-    user_name = None
-    if db_person.user_id:
-        user = db.query(User).filter(User.id == db_person.user_id).first()
-        user_name = user.user_name if user else None
+    logger.info(f"Created person: {person.person_id} - {person.name}")
 
     return {
         "id": db_person.id,
@@ -159,17 +139,17 @@ def create_person(
         "name": db_person.name,
         "department": db_person.department,
         "position": db_person.position,
-        "user_id": db_person.user_id,
+        "user_id": None,
         "status": db_person.status,
         "extra_data": db_person.extra_data,
         "face_encoding": db_person.face_encoding,
-        "user_name": user_name,
+        "user_name": None,
         "created_at": db_person.created_at,
         "updated_at": db_person.updated_at
     }
 
 
-@router.put("/{person_id}", response_model=PersonResponse)
+@router.put("/{person_id}")
 def update_person(
     person_id: str,
     person_update: PersonUpdate,
@@ -179,20 +159,13 @@ def update_person(
     更新人員資訊
 
     - **person_id**: 人員ID
-    - **user_id**: 關聯的使用者ID (可選，設為 null 可清除關聯)
     """
     person = db.query(Person).filter(Person.person_id == person_id).first()
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
-    # 更新欄位
-    update_data = person_update.model_dump(exclude_unset=True)
-
-    # 如果要更新 user_id，檢查使用者是否存在
-    if 'user_id' in update_data and update_data['user_id'] is not None:
-        user = db.query(User).filter(User.id == update_data['user_id']).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # 更新欄位（排除 user_id）
+    update_data = person_update.model_dump(exclude_unset=True, exclude={'user_id'})
 
     for field, value in update_data.items():
         setattr(person, field, value)
@@ -200,13 +173,7 @@ def update_person(
     db.commit()
     db.refresh(person)
 
-    logger.info(f"Updated person: {person_id} (user_id: {person.user_id})")
-
-    # 取得使用者名稱
-    user_name = None
-    if person.user_id:
-        user = db.query(User).filter(User.id == person.user_id).first()
-        user_name = user.user_name if user else None
+    logger.info(f"Updated person: {person_id}")
 
     return {
         "id": person.id,
@@ -214,11 +181,11 @@ def update_person(
         "name": person.name,
         "department": person.department,
         "position": person.position,
-        "user_id": person.user_id,
+        "user_id": None,
         "status": person.status,
         "extra_data": person.extra_data,
         "face_encoding": person.face_encoding,
-        "user_name": user_name,
+        "user_name": None,
         "created_at": person.created_at,
         "updated_at": person.updated_at
     }

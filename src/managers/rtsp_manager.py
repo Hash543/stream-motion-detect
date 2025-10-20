@@ -256,7 +256,8 @@ class RTSPManager:
     def process_frames(self) -> None:
         current_time = time.time()
 
-        for camera_id, stream in self.streams.items():
+        # Create a snapshot of streams to avoid "dictionary changed size during iteration" error
+        for camera_id, stream in list(self.streams.items()):
             if not stream.is_running:
                 continue
 

@@ -27,7 +27,11 @@
       "Bash(docker ps:*)",
       "Bash(npm run type-check:*)",
       "Bash(npm run:*)",
-      "Bash(npx vue-tsc:*)"
+      "Bash(npx vue-tsc:*)",
+      "Read(//c/Users/alish/Documents/face-motion/client/**)",
+      "Bash(psql:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

@@ -17,15 +17,11 @@ class Person(Base):
     name = Column(String(100), nullable=False)
     department = Column(String(100))
     position = Column(String(100))
-    user_id = Column(Integer, ForeignKey("user.id"), nullable=True, comment="關聯的使用者ID")
     status = Column(String(20), default="active")  # active, inactive
     face_encoding = Column(Text)  # JSON格式的人臉特徵
     extra_data = Column(JSON)  # 其他元數據 (renamed from metadata)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
-    # 關聯
-    user = relationship("User", foreign_keys=[user_id])
 
 
 class StreamSource(Base):

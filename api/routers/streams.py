@@ -427,9 +427,12 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
                     cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
                     # 顯示人名和信心度
-                    label = f"{face.person_id or 'Unknown'}"
-                    if face.confidence:
-                        label += f" ({face.confidence:.2f})"
+                    person_name = face.person_id or 'Unknown'
+                    # 始終顯示信心度（即使是0也顯示）
+                    if face.confidence is not None:
+                        label = f"{person_name} ({face.confidence:.2f})"
+                    else:
+                        label = person_name
 
                     # 繪製標籤背景
                     label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
@@ -446,24 +449,28 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
             try:
                 helmet_detections = monitoring_system.helmet_detector.detect(frame)
                 for helmet in helmet_detections:
-                    x, y, w, h = helmet['bbox']
-                    has_helmet = helmet['has_helmet']
-                    confidence = helmet['confidence']
+                    # DetectionResult 物件的 bbox 格式
+                    x, y, w, h = helmet.bbox
 
-                    # 有安全帽：藍色，無安全帽：紅色
-                    color = (255, 0, 0) if has_helmet else (0, 0, 255)
-                    label = f"{'Helmet' if has_helmet else 'No Helmet'} ({confidence:.2f})"
+                    # 判斷是否有戴安全帽（根據 detection_type）
+                    is_helmet = helmet.detection_type == "helmet"
+                    is_no_helmet = helmet.detection_type == "no_helmet"
 
-                    # 繪製框
-                    cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), color, 2)
+                    if is_helmet or is_no_helmet:
+                        # 有安全帽：藍色，無安全帽：紅色
+                        color = (255, 0, 0) if is_helmet else (0, 0, 255)
+                        label = f"{'Helmet' if is_helmet else 'No Helmet'} ({helmet.confidence:.2f})"
 
-                    # 繪製標籤背景
-                    label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
-                    cv2.rectangle(frame_with_detections, (x, y - 20), (x + label_size[0], y), color, -1)
+                        # 繪製框
+                        cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), color, 2)
 
-                    # 繪製標籤文字
-                    cv2.putText(frame_with_detections, label, (x, y - 5),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                        # 繪製標籤背景
+                        label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                        cv2.rectangle(frame_with_detections, (x, y - 20), (x + label_size[0], y), color, -1)
+
+                        # 繪製標籤文字
+                        cv2.putText(frame_with_detections, label, (x, y - 5),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             except Exception as e:
                 logger.debug(f"Error detecting helmets: {e}")
 

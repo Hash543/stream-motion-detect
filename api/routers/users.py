@@ -170,7 +170,7 @@ async def get_user_profile(
                     perm = db.query(Permission).filter(Permission.id == rp.permission_id).first()
                     if perm:
                         permissions.append({
-                            "id": perm.id,
+                            "permission_id": perm.id,
                             "permission_name": perm.permission_name,
                             "can_access": rp.can_access,
                             "can_edit": rp.can_edit

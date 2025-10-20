@@ -15,7 +15,7 @@ try:
     FACE_RECOGNITION_AVAILABLE = True
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
-    print("Warning: face_recognition not available, using MediaPipe as fallback")
+    # print("Warning: face_recognition not available, using MediaPipe as fallback")
 
 # 導入 MediaPipe 作為備用方案
 try:
@@ -102,7 +102,7 @@ class FaceRecognizer(AIDetector):
         detections = []
 
         if not FACE_RECOGNITION_AVAILABLE:
-            logger.warning("face_recognition not available, using MediaPipe fallback")
+            # logger.warning("face_recognition not available, using MediaPipe fallback")
             return self._detect_faces_with_mediapipe(frame)
 
         # Convert BGR to RGB for face_recognition

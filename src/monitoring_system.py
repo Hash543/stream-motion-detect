@@ -186,7 +186,7 @@ class MonitoringSystem:
                 helmet_detector=self.helmet_detector,
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
-                screenshot_interval=20  # 20 seconds interval for same person
+                screenshot_interval=5  # 5 seconds for testing (原本 20 秒)
             )
 
             # Inactivity Detection Manager
@@ -376,10 +376,31 @@ class MonitoringSystem:
                     frame, camera_id, face_detections
                 )
                 if helmet_violation_results:
-                    logger.debug(
-                        f"Helmet violation results: {len(helmet_violation_results)} "
-                        f"violations processed with interval control"
+                    logger.info(
+                        f"Helmet violation results: {len(helmet_violation_results)} violations detected"
                     )
+                    # Handle helmet violations (create database records, alerts, etc.)
+                    # Only process violations that took screenshots (interval control)
+                    for i, violation_data in enumerate(helmet_violation_results):
+                        screenshot_taken = violation_data.get("screenshot_taken", False)
+                        logger.info(
+                            f"Violation {i+1}: screenshot_taken={screenshot_taken}, "
+                            f"person_id={violation_data.get('person_id')}, "
+                            f"confidence={violation_data.get('confidence')}"
+                        )
+                        if screenshot_taken:
+                            # Create a DetectionResult object for the violation
+                            from .detectors.base_detector import DetectionResult
+                            violation = DetectionResult(
+                                detection_type="helmet_violation",
+                                confidence=violation_data.get("confidence", 0.0),
+                                bbox=violation_data.get("bbox", (0, 0, 0, 0)),
+                                additional_data=violation_data
+                            )
+                            logger.info(f"Calling _handle_violation for helmet violation")
+                            self._handle_violation(camera_id, frame, violation, face_detections, timestamp)
+                        else:
+                            logger.debug(f"Skipping violation {i+1} - no screenshot taken (interval control)")
 
             # Process drowsiness detection only if 'drowsiness' is in enabled types
             if 'drowsiness' in enabled_detection_types and self.drowsiness_detector:

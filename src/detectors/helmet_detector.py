@@ -76,10 +76,10 @@ class HelmetDetector(AIDetector):
 
             x1, y1, x2, y2 = box.astype(int)
 
-            x1 = max(0, min(x1, width - 1))
-            y1 = max(0, min(y1, height - 1))
-            x2 = max(x1 + 1, min(x2, width))
-            y2 = max(y1 + 1, min(y2, height))
+            x1 = int(max(0, min(x1, width - 1)))
+            y1 = int(max(0, min(y1, height - 1)))
+            x2 = int(max(x1 + 1, min(x2, width)))
+            y2 = int(max(y1 + 1, min(y2, height)))
 
             bbox = (x1, y1, x2 - x1, y2 - y1)
 

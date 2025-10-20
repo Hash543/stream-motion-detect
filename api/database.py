@@ -29,10 +29,11 @@ print(f"Using PostgreSQL database: {POSTGRES_DATABASE} at {POSTGRES_HOST}:{POSTG
 engine = create_engine(
     DATABASE_URL,
     connect_args={"connect_timeout": 10},
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=3600,
+    pool_size=5,  # 減少連線池大小
+    max_overflow=10,  # 減少最大溢出連線
+    pool_pre_ping=True,  # 連線前先 ping，確保連線有效
+    pool_recycle=1800,  # 30分鐘回收連線（改為較短時間）
+    pool_timeout=30,  # 等待連線的超時時間
     echo=False  # 設為 True 可以看到 SQL 查詢
 )
 
@@ -48,5 +49,19 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        # 發生錯誤時回滾
+        db.rollback()
+        raise
     finally:
+        # 確保 session 正確關閉
         db.close()
+
+
+def dispose_engine():
+    """關閉所有資料庫連線池"""
+    try:
+        engine.dispose()
+        print("Database connection pool disposed")
+    except Exception as e:
+        print(f"Error disposing database: {e}")
