@@ -567,9 +567,24 @@ class MonitoringSystem:
         # Check in universal stream manager first
         if camera_id in self.stream_manager.streams:
             stream = self.stream_manager.streams[camera_id]
-            return stream.stream_type
+            # Infer stream type from class name
+            class_name = stream.__class__.__name__
+            if 'Webcam' in class_name:
+                return "WEBCAM"
+            elif 'RTSP' in class_name:
+                return "RTSP"
+            elif 'MJPEG' in class_name or 'HTTP' in class_name:
+                return "HTTP_MJPEG"
+            elif 'HLS' in class_name:
+                return "HLS"
+            elif 'DASH' in class_name:
+                return "DASH"
+            elif 'WebRTC' in class_name:
+                return "WEBRTC"
+            elif 'ONVIF' in class_name:
+                return "ONVIF"
         # Default to RTSP for legacy streams
-        return "rtsp"
+        return "RTSP"
 
     def _associate_violation_with_person(self, violation, face_detections) -> Optional[str]:
         """Associate a violation with a detected person"""

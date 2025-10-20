@@ -44,7 +44,7 @@ def main():
 
         logger.info("Monitoring system started successfully")
 
-        # 從資料庫載入並啟動額外的串流來源（只載入 RTSP）
+        # 從資料庫載入並啟動額外的串流來源
         from api.database import SessionLocal
         from api.models import StreamSource
         from src.managers.database_manager import CameraRecord
@@ -52,46 +52,93 @@ def main():
         db = SessionLocal()
         try:
             db_streams = db.query(StreamSource).filter(
-                StreamSource.enabled == True,
-                StreamSource.stream_type == "RTSP"  # 只載入 RTSP
+                StreamSource.enabled == True
             ).all()
-            logger.info(f"Found {len(db_streams)} enabled RTSP streams in database")
+            logger.info(f"Found {len(db_streams)} enabled streams in database")
 
             for db_stream in db_streams:
                 stream_id = db_stream.stream_id
+                stream_type = db_stream.stream_type
 
-                # 檢查是否已經在 RTSP manager 中
-                if stream_id in monitoring_system.rtsp_manager.streams:
+                # 檢查是否已經載入
+                if stream_type == "RTSP" and stream_id in monitoring_system.rtsp_manager.streams:
+                    logger.info(f"Stream {stream_id} already loaded from config")
+                    continue
+                elif stream_type != "RTSP" and stream_id in monitoring_system.stream_manager.streams:
                     logger.info(f"Stream {stream_id} already loaded from config")
                     continue
 
-                # 添加到 RTSP manager
-                monitoring_system.rtsp_manager.add_stream(
-                    camera_id=stream_id,
-                    rtsp_url=db_stream.url,
-                    location=db_stream.location or "Unknown"
-                )
-                monitoring_system.rtsp_manager.set_frame_callback(
-                    stream_id,
-                    monitoring_system._process_frame
-                )
-
-                # 啟動串流
-                if monitoring_system.rtsp_manager.start_stream(stream_id):
-                    logger.info(f"Started database stream: {stream_id} (RTSP)")
-
-                    # 添加到資料庫
-                    camera_record = CameraRecord(
+                # 根據類型載入串流
+                if stream_type == "RTSP":
+                    # 使用 RTSP manager 處理 RTSP 串流
+                    monitoring_system.rtsp_manager.add_stream(
                         camera_id=stream_id,
-                        location=db_stream.location or "Unknown",
-                        rtsp_url=db_stream.url
+                        rtsp_url=db_stream.url,
+                        location=db_stream.location or "Unknown"
                     )
-                    monitoring_system.database_manager.add_camera(camera_record)
+                    monitoring_system.rtsp_manager.set_frame_callback(
+                        stream_id,
+                        monitoring_system._process_frame
+                    )
+
+                    if monitoring_system.rtsp_manager.start_stream(stream_id):
+                        logger.info(f"Started database stream: {stream_id} (RTSP)")
+                        camera_record = CameraRecord(
+                            camera_id=stream_id,
+                            location=db_stream.location or "Unknown",
+                            rtsp_url=db_stream.url
+                        )
+                        monitoring_system.database_manager.add_camera(camera_record)
+                    else:
+                        logger.error(f"Failed to start RTSP stream: {stream_id}")
+
                 else:
-                    logger.error(f"Failed to start stream: {stream_id}")
+                    # 使用 universal stream manager 處理其他類型的串流
+                    # 準備配置
+                    config = db_stream.config or {}
+
+                    # WEBCAM 特殊處理：將 url 轉換為 device_index
+                    if stream_type == "WEBCAM":
+                        try:
+                            config['device_index'] = int(db_stream.url) if db_stream.url else 0
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid webcam device index: {db_stream.url}, using 0")
+                            config['device_index'] = 0
+
+                    stream_config = {
+                        'id': stream_id,  # UniversalStreamManager 需要 'id' 欄位
+                        'stream_id': stream_id,
+                        'name': db_stream.name,
+                        'type': stream_type,
+                        'url': db_stream.url if stream_type != "WEBCAM" else None,
+                        'location': db_stream.location or "Unknown",
+                        'enabled': True,
+                        'config': config
+                    }
+
+                    if monitoring_system.stream_manager.add_stream(stream_config):
+                        monitoring_system.stream_manager.set_frame_callback(
+                            stream_id,
+                            monitoring_system._process_frame
+                        )
+
+                        if monitoring_system.stream_manager.start_stream(stream_id):
+                            logger.info(f"Started database stream: {stream_id} ({stream_type})")
+                            # Add camera record if database_manager exists
+                            if hasattr(monitoring_system, 'database_manager') and monitoring_system.database_manager:
+                                camera_record = CameraRecord(
+                                    camera_id=stream_id,
+                                    location=db_stream.location or "Unknown",
+                                    rtsp_url=db_stream.url if stream_type == "RTSP" else None
+                                )
+                                monitoring_system.database_manager.add_camera(camera_record)
+                        else:
+                            logger.error(f"Failed to start {stream_type} stream: {stream_id}")
+                    else:
+                        logger.error(f"Failed to add {stream_type} stream: {stream_id}")
 
         except Exception as e:
-            logger.error(f"Error loading database streams: {e}")
+            logger.error(f"Error loading database streams: {e}", exc_info=True)
         finally:
             db.close()
 
