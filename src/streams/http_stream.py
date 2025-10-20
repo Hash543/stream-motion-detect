@@ -256,10 +256,14 @@ class WebcamStream(BaseStream):
                 ret, frame = self.cap.read()
 
                 if not ret or frame is None:
-                    logger.warning(f"Failed to read frame from webcam {self.stream_id}")
+                    logger.warning(f"Failed to read frame from webcam {self.stream_id}, ret={ret}, frame={frame is not None}")
                     if not self._reconnect():
                         break
                     continue
+
+                # Debug: Log frame capture success occasionally
+                if int(current_time) % 10 == 0 and current_time - last_frame_time > 9:
+                    logger.debug(f"Webcam {self.stream_id} capturing frames, queue size: {self.frame_queue.qsize()}")
 
                 self._put_frame(frame, {'source': 'webcam', 'device_index': self.device_index})
                 last_frame_time = current_time

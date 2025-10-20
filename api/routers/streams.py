@@ -365,6 +365,9 @@ async def get_video_stream(
                                 else:
                                     # 如果是 tuple (向後兼容)
                                     frame, _ = frame_data
+                            else:
+                                # Debug: No frame available from queue
+                                logger.debug(f"No frame in queue for {stream_id}, queue size: {universal_stream.frame_queue.qsize() if hasattr(universal_stream, 'frame_queue') else 'N/A'}")
 
                 # 如果沒有獲取到幀，創建提示圖像
                 if frame is None:
