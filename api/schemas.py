@@ -51,6 +51,7 @@ class PersonBase(BaseModel):
     name: str = Field(..., description="姓名")
     department: Optional[str] = Field(None, description="部門")
     position: Optional[str] = Field(None, description="職位")
+    user_id: Optional[int] = Field(None, description="關聯的使用者ID")
     status: PersonStatus = Field(PersonStatus.ACTIVE, description="狀態")
     extra_data: Optional[Dict[str, Any]] = Field(None, description="其他元數據")
 
@@ -65,6 +66,7 @@ class PersonUpdate(BaseModel):
     name: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
+    user_id: Optional[int] = None
     status: Optional[PersonStatus] = None
     extra_data: Optional[Dict[str, Any]] = None
 
@@ -73,6 +75,7 @@ class PersonResponse(PersonBase):
     """人員回應"""
     id: int
     face_encoding: Optional[str] = None
+    user_name: Optional[str] = None  # 關聯的使用者名稱
     created_at: datetime
     updated_at: datetime
 
