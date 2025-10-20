@@ -22,7 +22,12 @@
       "Bash(echo \"POSTGRES_PASSWORD=$POSTGRES_PASSWORD\")",
       "Bash(test:*)",
       "Bash(docker exec:*)",
-      "Read(//d/face-motion/client/**)"
+      "Read(//d/face-motion/client/**)",
+      "Bash(cat:*)",
+      "Bash(docker ps:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vue-tsc:*)"
     ],
     "deny": [],
     "ask": []
