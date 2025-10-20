@@ -132,11 +132,55 @@ SET stream_type = 'HTTP_MJPEG',
 WHERE stream_id = '11223';
 ```
 
-### 方案 4: 優化完整系統（待開發）
+### 方案 4: Lazy Loading (✅ 已實作)
 
-可能的優化方向：
+**最新實作方案 - 延遲載入 AI 模型**
 
-1. **延遲載入模型**
+透過延遲載入技術,將 AI 模型的載入延後到實際需要時才進行,大幅減少啟動時的記憶體壓力。
+
+#### 實作細節:
+
+1. **新增 `src/detection/lazy_detector.py`**
+   - 單例模式管理所有 AI 偵測器
+   - 執行緒安全的延遲載入機制
+   - 支援獨立卸載各個模型
+
+2. **修改 `src/monitoring_system.py`**
+   - `_initialize_detectors()` 不再立即載入模型
+   - 在 `_process_frame()` 中根據偵測規則按需載入
+   - 僅在需要時才載入對應的偵測器
+
+#### 效益:
+
+✅ **啟動速度**: 系統啟動不再需要等待所有模型載入
+✅ **記憶體優化**: 初始記憶體佔用大幅降低
+✅ **穩定性提升**: 避免多個重量級庫同時初始化的衝突
+✅ **Webcam 穩定**: Webcam 串流可以在模型載入前開始運作
+
+#### 使用方式:
+
+```bash
+# 系統會自動使用延遲載入
+# 無需額外設定,啟動方式不變
+python start_api_with_streaming.py
+```
+
+#### 日誌輸出範例:
+
+```
+2025-10-20 15:26:39 - INFO - Initializing detection managers with lazy loading...
+2025-10-20 15:26:39 - INFO - ✓ Detection managers initialized (models will load on first use)
+2025-10-20 15:26:39 - INFO -   - Lazy loading enabled to reduce startup memory pressure
+2025-10-20 15:27:15 - INFO - Successfully connected to webcam: 11223
+2025-10-20 15:27:15 - INFO - Lazy loading face recognizer for detection...
+2025-10-20 15:27:15 - INFO - ✓ Face recognizer loaded successfully
+```
+
+### 方案 5: 進一步優化（待開發）
+
+其他可能的優化方向：
+
+1. **✅ 延遲載入模型** (已完成)
    - 只在需要時載入 AI 模型
    - 減少啟動時的記憶體壓力
 
@@ -158,14 +202,24 @@ cap = cv2.VideoCapture(0, cv2.CAP_MSMF)   # Media Foundation
 
 ## 建議配置
 
+### ✅ 推薦方案 (2025-10-20 更新)
+使用 **方案 4** (Lazy Loading) - 已整合到主系統
+- 無需額外設定
+- 啟動速度快
+- 記憶體優化
+- Webcam 串流穩定
+
 ### 開發/測試環境
-使用 **方案 1** (簡化版伺服器) 或 **方案 3** (分離服務)
+1. **方案 4** (Lazy Loading) - 優先推薦
+2. **方案 1** (簡化版伺服器) - 單純測試 webcam
+3. **方案 3** (分離服務) - 需要隔離時使用
 
 ### 生產環境
-使用 **方案 2** (外部 RTSP 伺服器)
-- 更穩定
-- 更易於擴展
-- 可獨立重啟串流服務
+1. **方案 4** (Lazy Loading) - 建議先測試
+2. **方案 2** (外部 RTSP 伺服器) - 需要更高穩定性時
+   - 更穩定
+   - 更易於擴展
+   - 可獨立重啟串流服務
 
 ## 檔案說明
 

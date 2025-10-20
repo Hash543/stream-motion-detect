@@ -16,9 +16,7 @@ from .managers.notification_sender import NotificationSender
 from .managers.rule_engine_manager import RuleEngineManager
 from .managers.alert_event_manager import AlertEventManager
 
-from .detectors.helmet_detector import HelmetDetector
-from .detectors.drowsiness_detector import DrowsinessDetector
-from .detectors.face_recognizer import FaceRecognizer
+from .detection.lazy_detector import get_lazy_detector_manager
 from .managers.face_detection_manager import FaceDetectionManager
 from .managers.helmet_violation_manager import HelmetViolationManager
 from .managers.inactivity_detection_manager import InactivityDetectionManager
@@ -38,7 +36,10 @@ class MonitoringSystem:
         self.rule_engine_manager = None
         self.alert_event_manager = None
 
-        # AI Detectors
+        # Lazy Detector Manager - prevents loading all models at startup
+        self.lazy_detector_manager = get_lazy_detector_manager()
+
+        # AI Detectors (loaded lazily when needed)
         self.helmet_detector = None
         self.drowsiness_detector = None
         self.face_recognizer = None
@@ -146,33 +147,17 @@ class MonitoringSystem:
         logger.info("All managers initialized")
 
     def _initialize_detectors(self) -> None:
-        """Initialize AI detectors"""
+        """Initialize AI detector managers (without loading models yet)"""
         try:
-            # Helmet detector
-            self.helmet_detector = HelmetDetector(
-                model_path=self.config.models.helmet_model_path,
-                confidence_threshold=self.config.detection_settings.helmet_confidence_threshold
-            )
-            self.helmet_detector.load_model()
+            logger.info("Initializing detection managers with lazy loading...")
 
-            # Drowsiness detector
-            self.drowsiness_detector = DrowsinessDetector(
-                confidence_threshold=self.config.detection_settings.face_recognition_threshold,
-                drowsiness_duration=self.config.detection_settings.drowsiness_duration_threshold
-            )
-            self.drowsiness_detector.load_model()
+            # NOTE: AI detectors will be loaded lazily when first detection rule triggers
+            # This prevents memory conflicts at startup with OpenCV, YOLOv8, MediaPipe, TensorFlow
 
-            # Face recognizer
-            self.face_recognizer = FaceRecognizer(
-                model_path=self.config.models.face_model_path,
-                confidence_threshold=self.config.detection_settings.face_recognition_threshold
-            )
-            self.face_recognizer.load_model()
-
+            # Initialize managers with None detectors - they will be loaded on-demand
             # Face Detection Manager with 10-second notification interval
-            # Note: database_manager removed - use API instead
             self.face_detection_manager = FaceDetectionManager(
-                face_recognizer=self.face_recognizer,
+                face_recognizer=None,  # Will be loaded lazily
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
                 database_manager=None,  # Use API instead
@@ -180,27 +165,26 @@ class MonitoringSystem:
                 auto_filing=False  # Disabled - use API instead
             )
 
-            # Helmet Violation Manager with 20-second screenshot interval
-            # 只在偵測到人臉時進行安全帽檢測
+            # Helmet Violation Manager with 5-second screenshot interval
             self.helmet_violation_manager = HelmetViolationManager(
-                helmet_detector=self.helmet_detector,
+                helmet_detector=None,  # Will be loaded lazily
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
-                screenshot_interval=5  # 5 seconds for testing (原本 20 秒)
+                screenshot_interval=5  # 5 seconds for testing
             )
 
             # Inactivity Detection Manager
-            # 檢測10分鐘內沒有人臉且沒有動作的情況
             self.inactivity_detection_manager = InactivityDetectionManager(
                 inactivity_threshold=600,  # 600 seconds (10 minutes) of inactivity
                 motion_threshold=5.0,      # Motion detection threshold
                 check_interval=600         # Check interval (10 minutes)
             )
 
-            logger.info("All AI detectors and managers initialized")
+            logger.info("✓ Detection managers initialized (models will load on first use)")
+            logger.info("  - Lazy loading enabled to reduce startup memory pressure")
 
         except Exception as e:
-            logger.error(f"Failed to initialize detectors: {e}")
+            logger.error(f"Failed to initialize detector managers: {e}")
             raise
 
     def _setup_rtsp_streams(self) -> None:
@@ -300,13 +284,11 @@ class MonitoringSystem:
         if self.notification_sender:
             self.notification_sender.stop_async_worker()
 
-        # Cleanup detectors
-        if self.helmet_detector:
-            self.helmet_detector.cleanup()
-        if self.drowsiness_detector:
-            self.drowsiness_detector.cleanup()
-        if self.face_recognizer:
-            self.face_recognizer.cleanup()
+        # Cleanup detectors via lazy detector manager
+        if self.lazy_detector_manager:
+            self.lazy_detector_manager.unload_all()
+
+        # Cleanup detection managers
         if self.face_detection_manager:
             self.face_detection_manager.cleanup()
         if self.helmet_violation_manager:
@@ -352,11 +334,22 @@ class MonitoringSystem:
 
             logger.debug(f"Enabled detection types for {camera_id}: {enabled_detection_types}")
 
-            # Always run face recognition for violation association (needed by other detectors)
-            face_detections = self.face_recognizer.detect(frame)
+            # Lazy load face recognizer if needed for face detection or other detectors
+            face_detections = []
+            if any(dt in enabled_detection_types for dt in ['face', 'helmet', 'inactivity']):
+                if not self.face_recognizer:
+                    logger.info("Lazy loading face recognizer for detection...")
+                    self.face_recognizer = self.lazy_detector_manager.get_face_recognizer()
+
+                if self.face_recognizer:
+                    face_detections = self.face_recognizer.detect(frame)
 
             # Process face detection only if 'face' is in enabled types
             if 'face' in enabled_detection_types and self.face_detection_manager:
+                # Update face detection manager's recognizer if not set
+                if not self.face_detection_manager.face_recognizer:
+                    self.face_detection_manager.face_recognizer = self.face_recognizer
+
                 face_detection_results = self.face_detection_manager.process_frame(frame, camera_id)
                 if face_detection_results:
                     logger.debug(f"Face detection results: {len(face_detection_results)} faces processed")
@@ -372,6 +365,15 @@ class MonitoringSystem:
 
             # Process helmet detection only if 'helmet' is in enabled types
             if 'helmet' in enabled_detection_types and self.helmet_violation_manager:
+                # Lazy load helmet detector if not already loaded
+                if not self.helmet_detector:
+                    logger.info("Lazy loading helmet detector for detection...")
+                    self.helmet_detector = self.lazy_detector_manager.get_helmet_detector()
+
+                # Update helmet violation manager's detector if not set
+                if not self.helmet_violation_manager.helmet_detector:
+                    self.helmet_violation_manager.helmet_detector = self.helmet_detector
+
                 helmet_violation_results = self.helmet_violation_manager.process_frame(
                     frame, camera_id, face_detections
                 )
@@ -403,11 +405,17 @@ class MonitoringSystem:
                             logger.debug(f"Skipping violation {i+1} - no screenshot taken (interval control)")
 
             # Process drowsiness detection only if 'drowsiness' is in enabled types
-            if 'drowsiness' in enabled_detection_types and self.drowsiness_detector:
-                drowsiness_detections = self.drowsiness_detector.detect(frame)
-                # Handle drowsiness violations
-                for violation in drowsiness_detections:
-                    self._handle_violation(camera_id, frame, violation, face_detections, timestamp)
+            if 'drowsiness' in enabled_detection_types:
+                # Lazy load drowsiness detector if not already loaded
+                if not self.drowsiness_detector:
+                    logger.info("Lazy loading drowsiness detector for detection...")
+                    self.drowsiness_detector = self.lazy_detector_manager.get_drowsiness_detector()
+
+                if self.drowsiness_detector:
+                    drowsiness_detections = self.drowsiness_detector.detect(frame)
+                    # Handle drowsiness violations
+                    for violation in drowsiness_detections:
+                        self._handle_violation(camera_id, frame, violation, face_detections, timestamp)
 
         except Exception as e:
             logger.error(f"Error processing frame from {camera_id}: {e}")
