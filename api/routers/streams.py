@@ -349,6 +349,7 @@ async def get_video_stream(
                         if rtsp_stream and rtsp_stream.is_running:
                             frame_data = rtsp_stream.get_latest_frame()
                             if frame_data:
+                                # RTSP stream 返回 tuple (frame, timestamp)
                                 frame, _ = frame_data
 
                     # 如果RTSP沒有，嘗試從通用串流管理器獲取
@@ -357,7 +358,13 @@ async def get_video_stream(
                         if universal_stream and hasattr(universal_stream, 'is_running') and universal_stream.is_running:
                             frame_data = universal_stream.get_latest_frame()
                             if frame_data:
-                                frame, _ = frame_data
+                                # Universal stream 返回 StreamFrame 物件
+                                from src.streams.base_stream import StreamFrame
+                                if isinstance(frame_data, StreamFrame):
+                                    frame = frame_data.frame
+                                else:
+                                    # 如果是 tuple (向後兼容)
+                                    frame, _ = frame_data
 
                 # 如果沒有獲取到幀，創建提示圖像
                 if frame is None:
