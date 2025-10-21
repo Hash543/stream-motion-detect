@@ -27,13 +27,60 @@
 
 ## 推薦解決方案
 
-### ✅ 方案 A: 使用簡化版 Webcam 伺服器（強烈推薦）
+### ✅ 方案 A: 使用外部 RTSP 伺服器（生產環境推薦）
+
+**使用 MediaMTX 將 Webcam 轉為 RTSP 串流：**
+
+這是最適合生產環境的方案，將 Webcam 標準化為 RTSP 協議，與其他監控串流一致。
+
+**實作步驟：**
+
+1. **下載 MediaMTX**
+```bash
+# Windows
+# 前往 https://github.com/bluenviron/mediamtx/releases
+# 下載最新版 Windows 執行檔
+```
+
+2. **建立配置檔 `mediamtx.yml`**
+```yaml
+paths:
+  webcam:
+    # Windows - 使用 DirectShow
+    runOnInit: ffmpeg -f dshow -i video="Integrated Camera" -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+
+    # 或使用 Media Foundation
+    # runOnInit: ffmpeg -f dshow -video_size 1280x720 -framerate 30 -i video="你的攝影機名稱" -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+```
+
+3. **啟動 MediaMTX**
+```bash
+./mediamtx
+```
+
+4. **更新資料庫串流設定**
+```sql
+UPDATE stream_sources
+SET stream_type = 'RTSP',
+    url = 'rtsp://localhost:8554/webcam'
+WHERE stream_id = '11223';
+```
 
 **優點：**
-- ✅ **已驗證穩定** - 實測無崩潰
-- ✅ **即時串流** - 無幀丟失
-- ✅ **低資源消耗** - 僅使用 OpenCV
-- ✅ **實作簡單** - 無需修改現有系統
+- ✅ 標準 RTSP 協議，與其他串流一致
+- ✅ 可被多個客戶端同時讀取
+- ✅ 獨立服務，可單獨重啟
+- ✅ 支援 AI 偵測（透過主系統）
+- ✅ 穩定性高，適合生產環境
+
+**缺點：**
+- 需要額外安裝 MediaMTX 和 FFmpeg
+- 有額外延遲（約 200ms）
+
+### 方案 B: 使用簡化版 Webcam 伺服器（僅供測試）
+
+**注意：** 此方案僅供快速測試用途，不建議用於生產環境。建議使用方案 A（RTSP）。
 
 **實作步驟：**
 
@@ -47,68 +94,16 @@ python start_api_webcam_only.py
 http://localhost:8283/video
 ```
 
-3. 主系統串流（含 AI 偵測）：
-```
-http://localhost:8282/api/streams/{其他串流ID}/video
-```
-
-**架構圖：**
-```
-┌─────────────────────────────────────┐
-│ Port 8283: 簡化版 Webcam 伺服器      │
-│ - 純 OpenCV 串流                    │
-│ - 無 AI 偵測                        │
-│ - 穩定、即時                        │
-└─────────────────────────────────────┘
-
-┌─────────────────────────────────────┐
-│ Port 8282: 主系統伺服器              │
-│ - RTSP 串流 + AI 偵測               │
-│ - 完整功能                          │
-│ - 用於其他攝影機                    │
-└─────────────────────────────────────┘
-```
-
-### 方案 B: 使用外部 RTSP 伺服器 + 主系統
-
-**使用 MediaMTX 將 Webcam 轉為 RTSP：**
-
-1. 下載 MediaMTX:
-```bash
-# Windows
-https://github.com/bluenviron/mediamtx/releases
-```
-
-2. 建立配置檔 `mediamtx.yml`:
-```yaml
-paths:
-  webcam:
-    runOnInit: ffmpeg -f dshow -i video="Integrated Camera" -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
-```
-
-3. 啟動 MediaMTX:
-```bash
-./mediamtx
-```
-
-4. 更新資料庫串流設定:
-```sql
-UPDATE stream_sources
-SET stream_type = 'RTSP',
-    url = 'rtsp://localhost:8554/webcam'
-WHERE stream_id = '11223';
-```
-
 **優點：**
-- 標準 RTSP 協議
-- 可被多個客戶端同時讀取
-- 獨立服務，可單獨重啟
+- 實作簡單
+- 即時串流
+- 適合快速測試
 
 **缺點：**
-- 需要額外安裝 MediaMTX
-- 增加系統複雜度
-- 有額外的延遲（~200ms）
+- ❌ 無 AI 偵測功能
+- ❌ 無法與主系統整合
+- ❌ 不適合生產環境
+- ❌ 需要額外運行一個服務
 
 ### 方案 C: 調整偵測頻率（部分緩解）
 
@@ -140,16 +135,24 @@ UPDATE detection_rules SET enabled = false WHERE detection_type IN ('helmet', 'd
 ## 實際建議
 
 ### 開發/測試階段
-**使用方案 A**（簡化版伺服器）
-- 快速驗證 Webcam 功能
-- 無需擔心穩定性問題
-- 可專注於其他功能開發
+**使用方案 B**（簡化版伺服器）
+- 快速驗證 Webcam 硬體是否正常
+- 測試串流基本功能
+- 無 AI 負載的純串流測試
 
 ### 生產環境
-**優先順序：**
-1. **方案 A**（簡化版伺服器）- 如果不需要 Webcam AI 偵測
-2. **方案 B**（RTSP 伺服器）- 如果需要 Webcam AI 偵測
-3. **不建議**主系統直接處理 Webcam - 穩定性問題
+**強烈推薦：方案 A（RTSP 伺服器）**
+
+**原因：**
+1. ✅ 標準化協議 - 所有串流都使用 RTSP
+2. ✅ 統一管理 - 與其他監控攝影機一致
+3. ✅ 支援 AI 偵測 - 透過主系統完整功能
+4. ✅ 穩定可靠 - 獨立服務，故障隔離
+5. ✅ 可擴展性 - 多客戶端同時存取
+
+**不推薦：**
+- ❌ 簡化版伺服器（方案 B）- 無 AI 功能，不適合生產
+- ❌ 主系統直接處理 Webcam - 穩定性問題未解決
 
 ## 長期解決方案（待開發）
 
@@ -170,25 +173,65 @@ UPDATE detection_rules SET enabled = false WHERE detection_type IN ('helmet', 'd
    - CUDA 加速 AI 推論
    - Linux 環境（更好的多執行緒支援）
 
-## 結論
+## 結論與實作步驟
 
-**最務實的做法：**
+### 生產環境建議配置
 
-```bash
-# 1. 啟動簡化版 Webcam 伺服器（純串流，穩定）
-python start_api_webcam_only.py
+**使用 MediaMTX + 主系統的 RTSP 統一架構：**
 
-# 2. 啟動主系統（處理其他 RTSP 串流 + AI 偵測）
-python start_api_with_streaming.py
+1. **安裝 MediaMTX**
+   - 下載：https://github.com/bluenviron/mediamtx/releases
+   - 解壓縮到專用目錄
+
+2. **配置 Webcam 為 RTSP 串流**
+   - 建立 `mediamtx.yml` 配置檔
+   - 設定 Webcam 輸入源
+   - 啟動 MediaMTX 服務
+
+3. **更新資料庫**
+   ```sql
+   UPDATE stream_sources
+   SET stream_type = 'RTSP',
+       url = 'rtsp://localhost:8554/webcam'
+   WHERE stream_id = '11223';
+   ```
+
+4. **啟動主系統**
+   ```bash
+   python start_api_with_streaming.py
+   ```
+
+5. **驗證**
+   - 檢查 RTSP 串流：`rtsp://localhost:8554/webcam`
+   - 檢查 API 串流：`http://localhost:8282/api/streams/11223/video`
+   - 確認 AI 偵測正常運作
+
+### 架構圖
+
+```
+┌──────────────────────────────────────────────┐
+│ MediaMTX (Port 8554)                         │
+│ - 將 Webcam 轉為 RTSP 串流                   │
+│ - 獨立服務，穩定可靠                         │
+└──────────────────┬───────────────────────────┘
+                   │ RTSP
+                   ↓
+┌──────────────────────────────────────────────┐
+│ 主系統 (Port 8282)                           │
+│ - 接收所有 RTSP 串流（包含 Webcam）          │
+│ - 統一進行 AI 偵測                           │
+│ - 提供 API 與串流服務                        │
+└──────────────────────────────────────────────┘
 ```
 
-兩個服務並行：
-- **Port 8283**: Webcam 即時串流（無 AI）
-- **Port 8282**: 其他串流 + AI 偵測（完整功能）
-
-這個方案已經過測試驗證，是目前最穩定的解決方案。
+**優勢：**
+- 所有串流都使用標準 RTSP 協議
+- Webcam 與其他監控設備一視同仁
+- 完整的 AI 偵測功能
+- 高穩定性與可維護性
 
 ---
 
 **日期**: 2025-10-20
-**狀態**: ✅ 推薦使用方案 A
+**狀態**: ✅ 推薦使用 RTSP 方案（方案 A）
+**備註**: 簡化版伺服器（方案 B）僅供測試用途
