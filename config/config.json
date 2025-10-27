@@ -10,7 +10,7 @@
     "helmet_confidence_threshold": 0.7,
     "drowsiness_duration_threshold": 3.0,
     "face_recognition_threshold": 0.6,
-    "processing_fps": 2
+    "processing_fps": 15
   },
   "notification_api": {
     "endpoint": "https://your-server.com/api/violations",

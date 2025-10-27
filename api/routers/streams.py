@@ -393,7 +393,7 @@ async def get_video_stream(
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
                 # 控制幀率 (約15 FPS，適合網頁顯示)
-                await asyncio.sleep(0.066)
+                await asyncio.sleep(0.033)
 
         except GeneratorExit:
             logger.info(f"Client disconnected from stream: {stream_id}")

@@ -19,12 +19,14 @@ class LazyDetectorManager:
         self._locks: Dict[str, Lock] = {
             'helmet': Lock(),
             'drowsiness': Lock(),
-            'face_recognition': Lock()
+            'face_recognition': Lock(),
+            'haar_cascade': Lock()
         }
         self._loading_state: Dict[str, bool] = {
             'helmet': False,
             'drowsiness': False,
-            'face_recognition': False
+            'face_recognition': False,
+            'haar_cascade': False
         }
 
     def get_helmet_detector(self):
@@ -35,8 +37,15 @@ class LazyDetectorManager:
                     logger.info("Lazy loading helmet detector (YOLOv8)...")
                     self._loading_state['helmet'] = True
                     try:
+                        import os
                         from src.detectors.helmet_detector import HelmetDetector
-                        detector = HelmetDetector()
+
+                        # 從環境變數或配置讀取模型路徑
+                        model_path = os.getenv('HELMET_MODEL_PATH', 'models/helmet_detection.pt')
+                        confidence = float(os.getenv('HELMET_CONFIDENCE_THRESHOLD', '0.3'))  # 降低到 0.3
+
+                        logger.info(f"Loading helmet detector with model: {model_path}, confidence: {confidence}")
+                        detector = HelmetDetector(model_path=model_path, confidence_threshold=confidence)
                         detector.load_model()  # Actually load the model weights
                         self._detectors['helmet'] = detector
                         logger.info("✓ Helmet detector loaded successfully")
@@ -90,6 +99,42 @@ class LazyDetectorManager:
 
         return self._detectors.get('face_recognition')
 
+
+    def get_haar_cascade_detector(self):
+        """Lazy load Haar Cascade face detector only when needed"""
+        if 'haar_cascade' not in self._detectors:
+            with self._locks['haar_cascade']:
+                if 'haar_cascade' not in self._detectors:
+                    logger.info("Lazy loading Haar Cascade face detector (OpenCV)...")
+                    self._loading_state['haar_cascade'] = True
+                    try:
+                        import os
+                        from src.detectors.face_detector_haar import HaarCascadeFaceDetector
+
+                        # Read configuration from environment
+                        model_path = os.getenv('HAAR_CASCADE_PATH', None)
+                        confidence = float(os.getenv('HAAR_CONFIDENCE_THRESHOLD', '0.5'))
+                        scale_factor = float(os.getenv('HAAR_SCALE_FACTOR', '1.1'))
+                        min_neighbors = int(os.getenv('HAAR_MIN_NEIGHBORS', '5'))
+
+                        logger.info(f"Loading Haar Cascade detector with confidence: {confidence}")
+                        detector = HaarCascadeFaceDetector(
+                            model_path=model_path,
+                            confidence_threshold=confidence,
+                            scale_factor=scale_factor,
+                            min_neighbors=min_neighbors
+                        )
+                        detector.load_model()  # Actually load the model weights
+                        self._detectors['haar_cascade'] = detector
+                        logger.info("✓ Haar Cascade detector loaded successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to load Haar Cascade detector: {e}")
+                        raise
+                    finally:
+                        self._loading_state['haar_cascade'] = False
+
+        return self._detectors.get('haar_cascade')
+
     def is_loading(self, detector_type: str) -> bool:
         """Check if a detector is currently being loaded"""
         return self._loading_state.get(detector_type, False)
@@ -134,6 +179,10 @@ class LazyDetectorManager:
             'face_recognition': {
                 'loaded': self.is_loaded('face_recognition'),
                 'loading': self.is_loading('face_recognition')
+            },
+            'haar_cascade': {
+                'loaded': self.is_loaded('haar_cascade'),
+                'loading': self.is_loading('haar_cascade')
             }
         }
 

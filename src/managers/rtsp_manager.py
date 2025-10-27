@@ -13,13 +13,14 @@ logger = logging.getLogger(__name__)
 class RTSPStream:
     def __init__(self, camera_id: str, rtsp_url: str, location: str,
                  max_reconnect_attempts: int = 5, reconnect_delay: int = 5,
-                 connection_timeout: int = 3):
+                 connection_timeout: int = 3, use_tcp: bool = True):
         self.camera_id = camera_id
         self.rtsp_url = rtsp_url
         self.location = location
         self.max_reconnect_attempts = max_reconnect_attempts
         self.reconnect_delay = reconnect_delay
         self.connection_timeout = connection_timeout
+        self.use_tcp = use_tcp  # TCP vs UDP transport
 
         self.cap: Optional[cv2.VideoCapture] = None
         self.is_running = False
@@ -36,14 +37,30 @@ class RTSPStream:
 
             logger.info(f"Connecting to RTSP stream: {self.camera_id} (timeout: {self.connection_timeout}s)")
 
-            # 設定 OpenCV RTSP 逾時參數（毫秒）
-            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = f'rtsp_transport;tcp|timeout;{self.connection_timeout * 1000000}'
+            # 設定 OpenCV RTSP 參數
+            # 注意：timeout 單位是微秒 (microseconds)
+            timeout_us = self.connection_timeout * 1000000
+            transport = 'tcp' if self.use_tcp else 'udp'
+
+            # 設定較長的超時和重試選項，適合遠端 RTSP 串流
+            # stimeout: socket timeout (微秒)
+            # max_delay: 最大延遲 (微秒)
+            ffmpeg_options = f'rtsp_transport;{transport}|timeout;{timeout_us}|stimeout;{timeout_us}|max_delay;5000000|reorder_queue_size;0'
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = ffmpeg_options
+
+            logger.debug(f"FFMPEG options for {self.camera_id}: {ffmpeg_options}")
 
             self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
 
-            # 設定連線逾時（OpenCV 4.5.2+）
-            self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.connection_timeout * 1000)
+            # 設定額外的連線參數
+            # CAP_PROP_OPEN_TIMEOUT_MSEC: 開啟超時（毫秒）
+            # CAP_PROP_READ_TIMEOUT_MSEC: 讀取超時（毫秒）
+            if hasattr(cv2, 'CAP_PROP_OPEN_TIMEOUT_MSEC'):
+                self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.connection_timeout * 1000)
+            if hasattr(cv2, 'CAP_PROP_READ_TIMEOUT_MSEC'):
+                self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.connection_timeout * 1000)
 
+            # 減小緩衝區以降低延遲
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             self.cap.set(cv2.CAP_PROP_FPS, 30)
 
@@ -181,8 +198,9 @@ class RTSPManager:
         self.last_processing_time: Dict[str, float] = {}
 
         # 從環境變數讀取 RTSP 設定
-        self.default_timeout = int(os.getenv('RTSP_TIMEOUT', '3'))
-        self.default_reconnect_attempts = int(os.getenv('RTSP_RECONNECT_ATTEMPTS', '2'))
+        # 增加預設超時時間以適應網路延遲和遠端 RTSP 來源
+        self.default_timeout = int(os.getenv('RTSP_TIMEOUT', '15'))
+        self.default_reconnect_attempts = int(os.getenv('RTSP_RECONNECT_ATTEMPTS', '3'))
         logger.info(f"RTSPManager initialized with timeout={self.default_timeout}s, reconnect_attempts={self.default_reconnect_attempts}")
 
     def add_stream(self, camera_id: str, rtsp_url: str, location: str) -> bool:

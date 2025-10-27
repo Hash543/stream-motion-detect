@@ -22,9 +22,16 @@ class HelmetDetector(AIDetector):
 
     def load_model(self) -> bool:
         try:
-            if self.model_path is None or self.model_path == "":
-                logger.warning("No model path provided, using default YOLOv8 model")
+            # 檢查模型檔案是否存在
+            import os
+            model_exists = self.model_path and os.path.isfile(self.model_path)
+
+            if not model_exists:
+                logger.warning(f"Helmet model not found at {self.model_path}, using default YOLOv8 for person detection")
+                logger.warning("Note: Default model can only detect 'person', not helmets. Please train or download a helmet detection model.")
                 self.model = YOLO('yolov8n.pt')
+                # 更新 class_names 為 COCO 類別（僅使用 person）
+                self.class_names = {0: "person"}  # YOLOv8 COCO: class 0 = person
             else:
                 if not torch.cuda.is_available():
                     logger.warning("CUDA not available, using CPU for inference")

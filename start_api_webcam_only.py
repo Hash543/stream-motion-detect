@@ -113,12 +113,12 @@ async def get_status():
 
 if __name__ == "__main__":
     logger.info("Starting Webcam Stream Server...")
-    logger.info("Video stream: http://localhost:8283/video")
-    logger.info("Status: http://localhost:8283/status")
+    logger.info("Video stream: http://localhost:8282/video")
+    logger.info("Status: http://localhost:8282/status")
 
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8283,
+        port=8282,
         log_level="info"
     )

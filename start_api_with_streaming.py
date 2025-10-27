@@ -83,12 +83,14 @@ def main():
 
                     if monitoring_system.rtsp_manager.start_stream(stream_id):
                         logger.info(f"Started database stream: {stream_id} (RTSP)")
-                        camera_record = CameraRecord(
-                            camera_id=stream_id,
-                            location=db_stream.location or "Unknown",
-                            rtsp_url=db_stream.url
-                        )
-                        monitoring_system.database_manager.add_camera(camera_record)
+                        # Add camera record if database_manager exists
+                        if hasattr(monitoring_system, 'database_manager') and monitoring_system.database_manager:
+                            camera_record = CameraRecord(
+                                camera_id=stream_id,
+                                location=db_stream.location or "Unknown",
+                                rtsp_url=db_stream.url
+                            )
+                            monitoring_system.database_manager.add_camera(camera_record)
                     else:
                         logger.error(f"Failed to start RTSP stream: {stream_id}")
 
