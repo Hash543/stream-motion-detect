@@ -31,7 +31,8 @@
       "Read(//c/Users/alish/Documents/face-motion/client/**)",
       "Bash(psql:*)",
       "Bash(findstr:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Read(//c/Users/alish/Documents/face-motion/**)"
     ],
     "deny": [],
     "ask": []

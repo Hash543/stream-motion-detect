@@ -68,7 +68,7 @@ def initialize_monitoring_system():
 
 
 def load_database_streams():
-    """從資料庫載入啟用的 RTSP 串流"""
+    """從資料庫載入啟用的串流 (RTSP and WEBCAM)"""
     global monitoring_system
 
     if not monitoring_system:
@@ -80,38 +80,99 @@ def load_database_streams():
 
         db = SessionLocal()
         try:
+            # 載入所有啟用的串流（RTSP 和 WEBCAM）
             db_streams = db.query(StreamSource).filter(
-                StreamSource.enabled == True,
-                StreamSource.stream_type == "RTSP"
+                StreamSource.enabled == True
             ).all()
 
-            logger.info(f"Found {len(db_streams)} enabled RTSP streams in database")
+            logger.info(f"Found {len(db_streams)} enabled streams in database")
 
             for db_stream in db_streams:
                 stream_id = db_stream.stream_id
+                stream_type = db_stream.stream_type.upper()
 
                 # 檢查是否已載入
                 if stream_id in monitoring_system.rtsp_manager.streams:
                     logger.info(f"Stream {stream_id} already loaded")
                     continue
 
-                # 添加串流
-                monitoring_system.rtsp_manager.add_stream(
-                    camera_id=stream_id,
-                    rtsp_url=db_stream.url,
-                    location=db_stream.location or "Unknown"
-                )
-                monitoring_system.rtsp_manager.set_frame_callback(
-                    stream_id,
-                    monitoring_system._process_frame
-                )
+                # 根據類型處理
+                if stream_type == "RTSP":
+                    # 處理 RTSP 串流
+                    monitoring_system.rtsp_manager.add_stream(
+                        camera_id=stream_id,
+                        rtsp_url=db_stream.url,
+                        location=db_stream.location or "Unknown"
+                    )
+                    monitoring_system.rtsp_manager.set_frame_callback(
+                        stream_id,
+                        monitoring_system._process_frame
+                    )
 
-                # 啟動串流
-                if monitoring_system.rtsp_manager.start_stream(stream_id):
-                    logger.info(f"Started stream: {stream_id}")
-                    # Camera records are managed via API, no need for database_manager
+                    if monitoring_system.rtsp_manager.start_stream(stream_id):
+                        logger.info(f"Started RTSP stream: {stream_id}")
+                    else:
+                        logger.error(f"Failed to start RTSP stream: {stream_id}")
+
+                elif stream_type == "WEBCAM":
+                    # 處理 WEBCAM 串流
+                    from src.streams.stream_factory import StreamFactory
+
+                    # 準備 config，如果為 None 則使用預設值
+                    config = db_stream.config if db_stream.config else {
+                        'device_index': 0,
+                        'resolution': {'width': 1280, 'height': 720},
+                        'fps': 30
+                    }
+
+                    # 確保必要欄位存在
+                    if 'device_index' not in config:
+                        config['device_index'] = 0
+                    if 'resolution' not in config:
+                        config['resolution'] = {'width': 1280, 'height': 720}
+                    if 'fps' not in config:
+                        config['fps'] = 30
+
+                    stream_config = {
+                        'id': stream_id,
+                        'name': db_stream.name,
+                        'type': 'WEBCAM',
+                        'location': db_stream.location or "Unknown",
+                        'config': config
+                    }
+
+                    # 驗證配置
+                    is_valid, msg = StreamFactory.validate_config(stream_config)
+                    if not is_valid:
+                        logger.error(f"Invalid WEBCAM config for {stream_id}: {msg}")
+                        continue
+
+                    # 創建 WEBCAM 串流
+                    webcam_stream = StreamFactory.create_stream(stream_config)
+                    if webcam_stream:
+                        # 註冊到 stream_manager 以便 API 可以訪問
+                        monitoring_system.stream_manager.streams[stream_id] = webcam_stream
+                        # 初始化 last_processing_time
+                        monitoring_system.stream_manager.last_processing_time[stream_id] = 0
+
+                        # 設定 frame callback
+                        def make_callback(sid):
+                            def frame_callback(stream_id_param, frame, timestamp):
+                                monitoring_system._process_frame(sid, frame, timestamp)
+                            return frame_callback
+
+                        monitoring_system.stream_manager.set_frame_callback(stream_id, make_callback(stream_id))
+
+                        # 啟動串流
+                        if webcam_stream.start_capture():
+                            logger.info(f"Started WEBCAM stream: {stream_id}")
+                        else:
+                            logger.error(f"Failed to start WEBCAM stream: {stream_id}")
+                    else:
+                        logger.error(f"Failed to create WEBCAM stream: {stream_id}")
+
                 else:
-                    logger.error(f"Failed to start stream: {stream_id}")
+                    logger.warning(f"Unsupported stream type '{stream_type}' for {stream_id}")
 
         finally:
             db.close()
