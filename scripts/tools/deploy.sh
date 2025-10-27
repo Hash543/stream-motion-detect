@@ -16,7 +16,7 @@ REMOTE_HOST="210.61.69.175"
 REMOTE_USER="ysapi_backup"
 REMOTE_DIR="~/stream-motion-detect"
 PROJECT_NAME="stream-motion-detect"
-SSH_KEY="D:\GoogleDrive\Hash記事本\ssh\macmini\id_ed25519"
+SSH_KEY="C:\Users\alish\我的雲端硬碟\Hash記事本\ssh\macmini\id_ed25519"
 SSH_OPTS="-i \"${SSH_KEY}\""
 
 echo -e "${GREEN}========================================${NC}"
@@ -114,8 +114,20 @@ echo -e "${GREEN}✓ 檔案同步完成${NC}"
 
 # 檢查並創建 .env 檔案
 echo -e "${YELLOW}[7/9] 配置環境變數...${NC}"
-ssh -i "${SSH_KEY}" "${REMOTE_USER}@${REMOTE_HOST}" "cd ${REMOTE_DIR} && if [ ! -f .env ]; then cp .env.example .env 2>/dev/null || echo 'DATABASE_URL=sqlite:///./data/monitoring.db
+ssh -i "${SSH_KEY}" "${REMOTE_USER}@${REMOTE_HOST}" "cd ${REMOTE_DIR} && if [ ! -f .env ]; then cp .env.example .env 2>/dev/null || echo '# PostgreSQL 資料庫設定
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=motion-detector
+POSTGRES_USER=face-motion
+POSTGRES_PASSWORD=kkk12345
+
+# Session Secret
+SESSION_SECRET=your-secret-key-change-this-in-production
+
+# 日誌設定
 LOG_LEVEL=INFO
+
+# 時區設定
 TZ=Asia/Taipei' > .env; fi"
 echo -e "${GREEN}✓ 環境變數配置完成${NC}"
 
