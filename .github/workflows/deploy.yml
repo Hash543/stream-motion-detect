@@ -1,0 +1,150 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 210.61.69.175 >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ysapi_backup@210.61.69.175 'echo "SSH connection successful"'
+
+      - name: Clean up old services
+        run: |
+          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
+            eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null
+
+            # 停止舊容器
+            OLD_CONTAINERS=$(docker ps -a --filter "publish=8001" --format "{{.ID}}" 2>/dev/null)
+            if [ ! -z "$OLD_CONTAINERS" ]; then
+              echo "Stopping old containers..."
+              docker stop $OLD_CONTAINERS 2>/dev/null || true
+              docker rm $OLD_CONTAINERS 2>/dev/null || true
+            fi
+          ENDSSH
+
+      - name: Create deployment directory
+        run: |
+          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 'mkdir -p ~/stream-motion-detect/{config,screenshots,logs,data,models}'
+
+      - name: Deploy application files
+        run: |
+          # 創建臨時壓縮檔
+          tar -czf deploy-package.tar.gz \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='venv' \
+            --exclude='env' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='logs/*.log' \
+            --exclude='data/*.db' \
+            --exclude='screenshots/*' \
+            --exclude='test_screenshots' \
+            --exclude='.env' \
+            .
+
+          # 上傳到伺服器
+          scp -i ~/.ssh/deploy_key deploy-package.tar.gz ysapi_backup@210.61.69.175:~/
+
+          # 解壓並清理
+          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
+            cd ~/stream-motion-detect
+            tar -xzf ~/deploy-package.tar.gz
+            rm ~/deploy-package.tar.gz
+          ENDSSH
+
+      - name: Setup environment variables
+        run: |
+          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
+            cd ~/stream-motion-detect
+
+            # 如果 .env 不存在，創建預設配置
+            if [ ! -f .env ]; then
+              cat > .env << 'EOF'
+          # PostgreSQL 資料庫設定
+          POSTGRES_HOST=db
+          POSTGRES_PORT=5432
+          POSTGRES_DATABASE=motion-detector
+          POSTGRES_USER=face-motion
+          POSTGRES_PASSWORD=kkk12345
+
+          # Session Secret
+          SESSION_SECRET=your-secret-key-change-this-in-production
+
+          # 日誌設定
+          LOG_LEVEL=INFO
+
+          # 時區設定
+          TZ=Asia/Taipei
+          EOF
+            fi
+          ENDSSH
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+            cd ~/stream-motion-detect
+
+            echo "Stopping existing containers..."
+            docker compose down
+
+            echo "Building and starting new containers..."
+            docker compose up -d --build
+
+            echo "Waiting for services to be healthy..."
+            sleep 10
+
+            echo "Checking service status..."
+            docker compose ps
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for API to be ready..."
+          sleep 5
+
+          # 檢查 API 健康狀態
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://detection-api.wyattst.net/api/health)
+
+          if [ "$HEALTH_STATUS" = "200" ]; then
+            echo "✅ Deployment successful! API is healthy."
+          else
+            echo "❌ Deployment failed! API health check returned: $HEALTH_STATUS"
+            exit 1
+          fi
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+
+      - name: Send deployment notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "🚀 Deployment to production completed successfully!"
+          else
+            echo "❌ Deployment to production failed!"
+          fi

@@ -32,7 +32,10 @@
       "Bash(psql:*)",
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
-      "Read(//c/Users/alish/Documents/face-motion/**)"
+      "Read(//c/Users/alish/Documents/face-motion/**)",
+      "Bash(bash:*)",
+      "Bash(nslookup:*)",
+      "WebFetch(domain:detection.wyattst.net)"
     ],
     "deny": [],
     "ask": []

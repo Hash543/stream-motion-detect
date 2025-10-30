@@ -1,10 +1,6 @@
 {
   "rtsp_sources": [
-    {
-      "id": "camera_001",
-      "url": "rtsp://jpku:au6aae@192.168.9.221/live.sdp",
-      "location": "桃園辦公室"
-    }
+    
   ],
   "detection_settings": {
     "helmet_confidence_threshold": 0.7,
