@@ -48,8 +48,9 @@ jobs:
 
       - name: Deploy application files
         run: |
-          # 創建臨時壓縮檔
-          tar -czf deploy-package.tar.gz \
+          # 使用 rsync 同步文件（更可靠且高效）
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             --exclude='.git' \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
@@ -62,17 +63,8 @@ jobs:
             --exclude='screenshots/*' \
             --exclude='test_screenshots' \
             --exclude='.env' \
-            .
-
-          # 上傳到伺服器
-          scp -i ~/.ssh/deploy_key deploy-package.tar.gz ysapi_backup@210.61.69.175:~/
-
-          # 解壓並清理
-          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
-            cd ~/stream-motion-detect
-            tar -xzf ~/deploy-package.tar.gz
-            rm ~/deploy-package.tar.gz
-          ENDSSH
+            --exclude='node_modules' \
+            ./ ysapi_backup@210.61.69.175:~/stream-motion-detect/
 
       - name: Setup environment variables
         run: |
