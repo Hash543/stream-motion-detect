@@ -259,27 +259,57 @@ class FaceDetectionManager:
             return None
 
     def _save_detection_record(self, record: FaceDetectionRecord) -> None:
-        """保存檢測記錄到JSON文件"""
+        """保存檢測記錄到JSON文件（線程安全）"""
         try:
             # 按日期組織記錄文件
             date_str = datetime.fromisoformat(record.detection_time).strftime("%Y-%m-%d")
             records_file = self.records_dir / f"detections_{date_str}.json"
 
-            # 讀取現有記錄
-            records = []
-            if records_file.exists():
-                with open(records_file, 'r', encoding='utf-8') as f:
-                    records = json.load(f)
-
-            # 添加新記錄
-            records.append(record.to_dict())
-
-            # 保存回文件
-            with open(records_file, 'w', encoding='utf-8') as f:
-                json.dump(records, f, indent=2, ensure_ascii=False)
-
-            # 也添加到內存緩存
+            # 使用锁保护文件读写操作，防止并发写入导致 JSON 损坏
             with self._lock:
+                # 讀取現有記錄
+                records = []
+                if records_file.exists():
+                    try:
+                        with open(records_file, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                            if content:
+                                records = json.loads(content)
+                    except json.JSONDecodeError as e:
+                        # JSON 文件损坏，备份并重新开始
+                        logger.warning(f"Corrupted JSON file detected: {records_file}, backing up and starting fresh")
+                        backup_file = records_file.with_suffix('.json.backup')
+                        if records_file.exists():
+                            import shutil
+                            shutil.copy(records_file, backup_file)
+                        records = []
+
+                # 添加新記錄
+                records.append(record.to_dict())
+
+                # 使用临时文件+原子重命名来保证写入安全
+                import tempfile
+                import os
+                temp_fd, temp_path = tempfile.mkstemp(
+                    dir=records_file.parent,
+                    suffix='.tmp',
+                    text=True
+                )
+
+                try:
+                    with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+                        json.dump(records, f, indent=2, ensure_ascii=False)
+
+                    # 原子性地替换旧文件
+                    import shutil
+                    shutil.move(temp_path, records_file)
+                except:
+                    # 清理临时文件
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                    raise
+
+                # 也添加到內存緩存
                 self.detection_records.append(record)
                 # 限制內存中的記錄數量
                 if len(self.detection_records) > 1000:
