@@ -25,11 +25,22 @@ class RTSPStream(BaseStream):
     def connect(self) -> bool:
         try:
             import cv2
+            import os
 
             if self.cap:
                 self.cap.release()
 
-            self.cap = cv2.VideoCapture(self.rtsp_url)
+            # 设置 OpenCV RTSP 参数以提高连接成功率
+            # 使用环境变量设置 RTSP transport 为 TCP（更稳定）
+            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp'
+
+            self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+
+            # 设置超时（秒）
+            self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.timeout * 1000)
+            self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.timeout * 1000)
+
+            # 设置缓冲区大小（降低延迟）
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.config.get('buffer_size', 1))
 
             if 'fps' in self.config:

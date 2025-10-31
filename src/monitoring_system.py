@@ -15,6 +15,7 @@ from .managers.screenshot_manager import ScreenshotManager
 from .managers.notification_sender import NotificationSender
 from .managers.rule_engine_manager import RuleEngineManager
 from .managers.alert_event_manager import AlertEventManager
+from .managers.database_stream_loader import DatabaseStreamLoader
 
 from .detection.lazy_detector import get_lazy_detector_manager
 from .managers.face_detection_manager import FaceDetectionManager
@@ -91,8 +92,8 @@ class MonitoringSystem:
             # Setup RTSP streams (legacy)
             self._setup_rtsp_streams()
 
-            # # Setup universal streams
-            # self._setup_universal_streams()
+            # Load streams from database and setup
+            self._load_streams_from_database()
 
             logger.info("System initialization completed successfully")
             return True
@@ -215,6 +216,41 @@ class MonitoringSystem:
 
         success_count = sum(1 for success in results.values() if success)
         logger.info(f"Setup {success_count}/{len(results)} universal streams")
+
+    def _load_streams_from_database(self) -> None:
+        """Load and setup streams from database"""
+        try:
+            from api.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                # 从数据库加载 stream configurations
+                stream_configs = DatabaseStreamLoader.load_streams_from_database(db)
+
+                if not stream_configs:
+                    logger.info("No streams found in database")
+                    return
+
+                # 添加到 stream manager
+                success_count = 0
+                for stream_config in stream_configs:
+                    if self.stream_manager.add_stream(stream_config):
+                        # Set frame callback for the stream
+                        self.stream_manager.set_frame_callback(
+                            stream_config['id'],
+                            self._process_frame
+                        )
+                        success_count += 1
+
+                logger.info(f"Loaded {success_count}/{len(stream_configs)} streams from database")
+
+            finally:
+                db.close()
+
+        except ImportError:
+            logger.warning("Database not available, skipping database stream loading")
+        except Exception as e:
+            logger.error(f"Error loading streams from database: {e}")
 
     def start(self) -> bool:
         """Start the monitoring system"""
