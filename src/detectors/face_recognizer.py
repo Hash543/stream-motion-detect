@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 import json
 from datetime import datetime
+import threading
 from .base_detector import AIDetector, DetectionResult, Person
 
 # 嘗試導入 face_recognition，如果失敗則使用替代方案
@@ -48,6 +49,9 @@ class FaceRecognizer(AIDetector):
         # 初始化檢測引擎
         self.use_face_recognition = FACE_RECOGNITION_AVAILABLE
         self.use_mediapipe = MEDIAPIPE_AVAILABLE
+
+        # MediaPipe 線程鎖，防止並發調用導致時間戳錯誤
+        self._mediapipe_lock = threading.Lock()
 
         if self.use_mediapipe:
             self.mp_face_detection = mp.solutions.face_detection
@@ -159,8 +163,11 @@ class FaceRecognizer(AIDetector):
         # Convert BGR to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Process the frame
-        results = self.face_detection.process(rgb_frame)
+        # 使用線程鎖保護 MediaPipe 調用，避免時間戳衝突
+        # MediaPipe 要求時間戳嚴格單調遞增，並發調用會導致錯誤
+        with self._mediapipe_lock:
+            # Process the frame
+            results = self.face_detection.process(rgb_frame)
 
         if results.detections:
             h, w, _ = frame.shape
