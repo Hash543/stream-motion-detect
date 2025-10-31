@@ -331,6 +331,9 @@ async def get_video_stream(
 
     async def generate_frames():
         """生成MJPEG串流幀"""
+        last_frame = None  # 緩存最後一幀，避免閃爍
+        no_frame_logged = False  # 避免重複記錄日誌
+
         try:
             logger.info(f"Starting MJPEG stream for: {stream_id} (detection={detection})")
 
@@ -339,9 +342,12 @@ async def get_video_stream(
                 frame = None
 
                 if _monitoring_system is None:
-                    # 如果監控系統未初始化，返回錯誤幀
-                    logger.warning("Monitoring system not initialized")
-                    frame = _create_error_frame("Monitoring system not initialized")
+                    # 如果監控系統未初始化，返回錯誤幀（僅在沒有緩存時）
+                    if last_frame is None:
+                        logger.warning("Monitoring system not initialized")
+                        frame = _create_error_frame("Monitoring system not initialized")
+                    else:
+                        frame = last_frame  # 使用最後一幀
                 else:
                     # 嘗試從RTSP管理器獲取幀
                     if hasattr(_monitoring_system, 'rtsp_manager') and _monitoring_system.rtsp_manager:
@@ -365,16 +371,32 @@ async def get_video_stream(
                                 else:
                                     # 如果是 tuple (向後兼容)
                                     frame, _ = frame_data
-                            else:
-                                # Debug: No frame available from queue
-                                logger.debug(f"No frame in queue for {stream_id}, queue size: {universal_stream.frame_queue.qsize() if hasattr(universal_stream, 'frame_queue') else 'N/A'}")
 
-                # 如果沒有獲取到幀，創建提示圖像
-                if frame is None:
-                    frame = _create_error_frame(f"No frame available for {stream_id}")
-                elif detection and _monitoring_system is not None:
+                # 處理幀
+                if frame is not None:
+                    # 獲取到新幀，重置日誌標記
+                    no_frame_logged = False
+
                     # 如果需要顯示偵測框，進行即時偵測並繪製
-                    frame = _draw_detections(frame, _monitoring_system)
+                    if detection and _monitoring_system is not None:
+                        frame = _draw_detections(frame, _monitoring_system)
+
+                    # 更新最後一幀緩存
+                    last_frame = frame.copy()
+                else:
+                    # 沒有新幀，使用緩存的最後一幀（避免閃爍）
+                    if last_frame is not None:
+                        frame = last_frame
+                        # 只記錄一次日誌
+                        if not no_frame_logged:
+                            logger.debug(f"No new frame for {stream_id}, using cached frame")
+                            no_frame_logged = True
+                    else:
+                        # 連緩存都沒有，顯示等待訊息
+                        frame = _create_error_frame(f"Waiting for first frame from {stream_id}...")
+                        if not no_frame_logged:
+                            logger.warning(f"Waiting for first frame from {stream_id}")
+                            no_frame_logged = True
 
                 # 將幀編碼為JPEG
                 try:
