@@ -162,16 +162,16 @@ class MonitoringSystem:
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
                 database_manager=None,  # Use API instead
-                notification_interval=10,  # 10 seconds interval
+                notification_interval=120,  # 2 minutes interval
                 auto_filing=False  # Disabled - use API instead
             )
 
-            # Helmet Violation Manager with 5-second screenshot interval
+            # Helmet Violation Manager with 2-minute screenshot interval
             self.helmet_violation_manager = HelmetViolationManager(
                 helmet_detector=None,  # Will be loaded lazily
                 notification_sender=self.notification_sender,
                 screenshot_manager=self.screenshot_manager,
-                screenshot_interval=5  # 5 seconds for testing
+                screenshot_interval=120  # 2 minutes interval
             )
 
             # Inactivity Detection Manager
