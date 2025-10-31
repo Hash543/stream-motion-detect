@@ -30,6 +30,7 @@ services:
       dockerfile: Dockerfile
     container_name: stream-monitor-api
     restart: unless-stopped
+    command: python start_api.py  # 使用 start_api.py 來初始化監控系統
     ports:
       - "8282:8282"
     volumes:
@@ -59,34 +60,34 @@ services:
       retries: 3
       start_period: 40s
 
-  # 監控服務 (處理影像串流和檢測)
-  monitor:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: stream-monitor-service
-    restart: unless-stopped
-    command: python start_system.py
-    volumes:
-      - ./config:/app/config
-      - ./screenshots:/app/screenshots
-      - ./logs:/app/logs
-      - ./data:/app/data
-      - ./models:/app/models
-    environment:
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-motion-detector}
-      - POSTGRES_USER=${POSTGRES_USER:-face-motion}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkk12345}
-      - LOG_LEVEL=INFO
-      - TZ=Asia/Taipei
-      - AUTO_START=true
-    networks:
-      - monitor-network
-    depends_on:
-      - api
-      - db
+  # 監控服務 (處理影像串流和檢測) - 已整合到 API 服務中
+  # monitor:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: stream-monitor-service
+  #   restart: unless-stopped
+  #   command: python start_system.py
+  #   volumes:
+  #     - ./config:/app/config
+  #     - ./screenshots:/app/screenshots
+  #     - ./logs:/app/logs
+  #     - ./data:/app/data
+  #     - ./models:/app/models
+  #   environment:
+  #     - POSTGRES_HOST=db
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_DATABASE=${POSTGRES_DATABASE:-motion-detector}
+  #     - POSTGRES_USER=${POSTGRES_USER:-face-motion}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kkk12345}
+  #     - LOG_LEVEL=INFO
+  #     - TZ=Asia/Taipei
+  #     - AUTO_START=true
+  #   networks:
+  #     - monitor-network
+  #   depends_on:
+  #     - api
+  #     - db
     # 如需使用GPU
     # deploy:
     #   resources:
