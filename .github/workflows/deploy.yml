@@ -28,69 +28,54 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ysapi_backup@210.61.69.175 'echo "SSH connection successful"'
 
-      - name: Clean up old services
-        run: |
-          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
-            eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null
-
-            # 停止舊容器
-            OLD_CONTAINERS=$(docker ps -a --filter "publish=8001" --format "{{.ID}}" 2>/dev/null)
-            if [ ! -z "$OLD_CONTAINERS" ]; then
-              echo "Stopping old containers..."
-              docker stop $OLD_CONTAINERS 2>/dev/null || true
-              docker rm $OLD_CONTAINERS 2>/dev/null || true
-            fi
-          ENDSSH
-
-      - name: Create deployment directory
-        run: |
-          ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 'mkdir -p ~/stream-motion-detect/{config,screenshots,logs,data,models}'
-
-      - name: Deploy application files
-        run: |
-          # 使用 rsync 同步文件（更可靠且高效）
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
-            --exclude='.git' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='venv' \
-            --exclude='env' \
-            --exclude='.vscode' \
-            --exclude='.idea' \
-            --exclude='logs/*.log' \
-            --exclude='data/*.db' \
-            --exclude='screenshots/*' \
-            --exclude='test_screenshots' \
-            --exclude='.env' \
-            --exclude='node_modules' \
-            ./ ysapi_backup@210.61.69.175:~/stream-motion-detect/
-
-      - name: Setup environment variables
+      - name: Pull latest code from Git
         run: |
           ssh -i ~/.ssh/deploy_key ysapi_backup@210.61.69.175 << 'ENDSSH'
             cd ~/stream-motion-detect
 
-            # 如果 .env 不存在，創建預設配置
-            if [ ! -f .env ]; then
-              cat > .env << 'EOF'
-          # PostgreSQL 資料庫設定
-          POSTGRES_HOST=db
-          POSTGRES_PORT=5432
-          POSTGRES_DATABASE=motion-detector
-          POSTGRES_USER=face-motion
-          POSTGRES_PASSWORD=kkk12345
-
-          # Session Secret
-          SESSION_SECRET=your-secret-key-change-this-in-production
-
-          # 日誌設定
-          LOG_LEVEL=INFO
-
-          # 時區設定
-          TZ=Asia/Taipei
-          EOF
+            echo "📦 Backing up .env file..."
+            if [ -f .env ]; then
+              cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+              echo "✅ .env backed up"
             fi
+
+            echo "🔄 Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "✅ Code updated to latest commit:"
+            git log -1 --oneline
+
+            echo "📝 Restoring .env file..."
+            # 恢復最新的備份
+            LATEST_BACKUP=$(ls -t .env.backup.* 2>/dev/null | head -1)
+            if [ -n "$LATEST_BACKUP" ]; then
+              cp "$LATEST_BACKUP" .env
+              echo "✅ .env restored from $LATEST_BACKUP"
+            elif [ ! -f .env ]; then
+              # 如果沒有備份且沒有 .env，創建預設配置
+              cat > .env << 'EOF'
+# PostgreSQL 資料庫設定
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=motion-detector
+POSTGRES_USER=face-motion
+POSTGRES_PASSWORD=kkk12345
+
+# Session Secret
+SESSION_SECRET=your-secret-key-change-this-in-production
+
+# 日誌設定
+LOG_LEVEL=INFO
+
+# 時區設定
+TZ=Asia/Taipei
+EOF
+              echo "✅ .env created with default settings"
+            fi
+
+            # 建立必要目錄
+            mkdir -p config screenshots logs data models
           ENDSSH
 
       - name: Deploy with Docker Compose
@@ -99,16 +84,16 @@ jobs:
             eval "$(/opt/homebrew/bin/brew shellenv)"
             cd ~/stream-motion-detect
 
-            echo "Stopping existing containers..."
+            echo "🛑 Stopping existing containers..."
             docker compose down
 
-            echo "Building and starting new containers..."
+            echo "🔨 Building and starting new containers..."
             docker compose up -d --build
 
-            echo "Waiting for services to be healthy..."
+            echo "⏳ Waiting for services to be healthy..."
             sleep 10
 
-            echo "Checking service status..."
+            echo "📊 Checking service status..."
             docker compose ps
           ENDSSH
 
