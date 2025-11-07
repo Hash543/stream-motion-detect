@@ -54,23 +54,14 @@ jobs:
               echo "✅ .env restored from $LATEST_BACKUP"
             elif [ ! -f .env ]; then
               # 如果沒有備份且沒有 .env，創建預設配置
-              cat > .env << 'EOF'
-# PostgreSQL 資料庫設定
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
-POSTGRES_DATABASE=motion-detector
-POSTGRES_USER=face-motion
-POSTGRES_PASSWORD=kkk12345
-
-# Session Secret
-SESSION_SECRET=your-secret-key-change-this-in-production
-
-# 日誌設定
-LOG_LEVEL=INFO
-
-# 時區設定
-TZ=Asia/Taipei
-EOF
+              echo "POSTGRES_HOST=db" > .env
+              echo "POSTGRES_PORT=5432" >> .env
+              echo "POSTGRES_DATABASE=motion-detector" >> .env
+              echo "POSTGRES_USER=face-motion" >> .env
+              echo "POSTGRES_PASSWORD=kkk12345" >> .env
+              echo "SESSION_SECRET=your-secret-key-change-this-in-production" >> .env
+              echo "LOG_LEVEL=INFO" >> .env
+              echo "TZ=Asia/Taipei" >> .env
               echo "✅ .env created with default settings"
             fi
 
