@@ -449,9 +449,18 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
         frame_with_detections = frame.copy()
 
         # 1. 人臉偵測
-        if hasattr(monitoring_system, 'face_recognizer') and monitoring_system.face_recognizer:
+        face_recognizer = None
+        if hasattr(monitoring_system, 'lazy_detector_manager'):
             try:
-                face_detections = monitoring_system.face_recognizer.detect(frame)
+                face_recognizer = monitoring_system.lazy_detector_manager.get_face_recognizer()
+            except Exception as e:
+                logger.debug(f"Error loading face recognizer: {e}")
+        elif hasattr(monitoring_system, 'face_recognizer'):
+            face_recognizer = monitoring_system.face_recognizer
+
+        if face_recognizer:
+            try:
+                face_detections = face_recognizer.detect(frame)
                 for face in face_detections:
                     x, y, w, h = face.bbox
 
@@ -477,9 +486,18 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
                 logger.debug(f"Error detecting faces: {e}")
 
         # 2. 安全帽偵測
-        if hasattr(monitoring_system, 'helmet_detector') and monitoring_system.helmet_detector:
+        helmet_detector = None
+        if hasattr(monitoring_system, 'lazy_detector_manager'):
             try:
-                helmet_detections = monitoring_system.helmet_detector.detect(frame)
+                helmet_detector = monitoring_system.lazy_detector_manager.get_helmet_detector()
+            except Exception as e:
+                logger.debug(f"Error loading helmet detector: {e}")
+        elif hasattr(monitoring_system, 'helmet_detector'):
+            helmet_detector = monitoring_system.helmet_detector
+
+        if helmet_detector:
+            try:
+                helmet_detections = helmet_detector.detect(frame)
                 for helmet in helmet_detections:
                     # DetectionResult 物件的 bbox 格式
                     x, y, w, h = helmet.bbox
@@ -507,9 +525,18 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
                 logger.debug(f"Error detecting helmets: {e}")
 
         # 3. 瞌睡偵測
-        if hasattr(monitoring_system, 'drowsiness_detector') and monitoring_system.drowsiness_detector:
+        drowsiness_detector = None
+        if hasattr(monitoring_system, 'lazy_detector_manager'):
             try:
-                drowsiness_detections = monitoring_system.drowsiness_detector.detect(frame)
+                drowsiness_detector = monitoring_system.lazy_detector_manager.get_drowsiness_detector()
+            except Exception as e:
+                logger.debug(f"Error loading drowsiness detector: {e}")
+        elif hasattr(monitoring_system, 'drowsiness_detector'):
+            drowsiness_detector = monitoring_system.drowsiness_detector
+
+        if drowsiness_detector:
+            try:
+                drowsiness_detections = drowsiness_detector.detect(frame)
                 for drowsy in drowsiness_detections:
                     x, y, w, h = drowsy.bbox
 
