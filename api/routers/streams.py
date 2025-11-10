@@ -13,12 +13,13 @@ import numpy as np
 import time
 import asyncio
 
-from api.database import get_db
-from api.models import StreamSource
+from api.database import get_db, SessionLocal
+from api.models import StreamSource, Person
 from api.schemas import (
     StreamSourceCreate, StreamSourceUpdate, StreamSourceResponse,
     MessageResponse, StreamType
 )
+from datetime import datetime
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -433,9 +434,61 @@ async def get_video_stream(
     )
 
 
+def _ensure_person_in_database(person_id: str, person_name: str, confidence: float) -> bool:
+    """
+    確保人員記錄存在於資料庫中（insert if not exist）
+
+    Args:
+        person_id: 人員ID
+        person_name: 人員名稱
+        confidence: 檢測信心度
+
+    Returns:
+        是否成功記錄
+    """
+    try:
+        # 創建新的資料庫 session
+        db = SessionLocal()
+        try:
+            # 檢查人員是否已存在
+            existing_person = db.query(Person).filter(Person.person_id == person_id).first()
+
+            if existing_person:
+                # 更新 updated_at 時間戳
+                existing_person.updated_at = datetime.now()
+                db.commit()
+                logger.debug(f"Updated timestamp for existing person: {person_id}")
+            else:
+                # 創建新的人員記錄
+                new_person = Person(
+                    person_id=person_id,
+                    name=person_name,
+                    status="active",
+                    extra_data={
+                        "detection_source": "face_recognition",
+                        "first_detection_confidence": confidence,
+                        "auto_created": True
+                    },
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+                db.add(new_person)
+                db.commit()
+                logger.info(f"Created new person record: {person_id} ({person_name})")
+
+            return True
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Failed to ensure person in database for {person_id}: {e}")
+        return False
+
+
 def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
     """
-    在影像上繪製偵測框
+    在影像上繪製偵測框，並自動記錄檢測到的人員
 
     Args:
         frame: 原始影像幀
@@ -468,7 +521,9 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
                     cv2.rectangle(frame_with_detections, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
                     # 顯示人名和信心度
-                    person_name = face.person_id or 'Unknown'
+                    person_id = face.person_id or 'Unknown'
+                    person_name = face.additional_data.get('person_name', person_id) if hasattr(face, 'additional_data') and face.additional_data else person_id
+
                     # 始終顯示信心度（即使是0也顯示）
                     if face.confidence is not None:
                         label = f"{person_name} ({face.confidence:.2f})"
@@ -482,6 +537,10 @@ def _draw_detections(frame: np.ndarray, monitoring_system) -> np.ndarray:
                     # 繪製標籤文字
                     cv2.putText(frame_with_detections, label, (x, y - 5),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+                    # 自動記錄人員到資料庫（insert if not exist）
+                    if person_id and person_id != 'Unknown' and person_id.lower() != 'unknown':
+                        _ensure_person_in_database(person_id, person_name, face.confidence)
             except Exception as e:
                 logger.debug(f"Error detecting faces: {e}")
 
